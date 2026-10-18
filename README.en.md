@@ -2,7 +2,7 @@
 
 MIT fork of [Seann0824/deepseek-harness-for-codex](https://github.com/Seann0824/deepseek-harness-for-codex). Codex plugin `0.5.0-desktop.1` plus local Host bridge `0.1.0`, targeting installed Desktop **0.2.1-rc.2**. No separate DSH service, app patch, npm release or Pi extension.
 
-Real passive authentication, WebSocket, catalog and twelve filesystem/identity checks passed. 56 automated tests passed. One authorized synthetic prompt reached the real Host, but the existing model returned HTTP 401. Paid retries stopped; real model completion/cancel/follow-up and live Codex metadata delivery remain unverified. Synthetic metadata is not proof of live host delivery.
+Real passive authentication, WebSocket, catalog and twelve filesystem/identity checks passed. 56 automated tests passed. After the user configured Ollama, a real Host turn returned the exact expected string. A follow-up reused that completed session and was cancelled; the native GUI visibly showed the completed first turn and stopped second turn. No automatic title request occurred in that session. These tests used controlled synthetic caller authority. Live metadata delivery from a new Codex task remains unverified.
 
 Install the Codex fork from branch `codex/desktop-attach`, then explicitly approve installing/enabling the absolute `dsh-execution-bridge` directory through DSH's official Plugin Manager. Linked installs need their source directory retained. Disable the old upstream copy and open a new Codex task after updates.
 

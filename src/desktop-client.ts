@@ -5,7 +5,7 @@ import WebSocket from "ws";
 
 export const DESKTOP_GUI_URL = "dsh://open";
 const RECONNECT = "Desktop is not connected. Use connect_desktop with a connection file explicitly supplied and approved by the user.";
-const METHODS = new Set(["workspace/create", "session/create", "session/prompt", "session/cancel", "session/list", "session/page", "session/projections", "session/modelCatalog", "session/selectModel"]);
+const METHODS = new Set(["pluginManager/listBundles", "pluginManager/setBundleEnabled", "codexBridge/status", "codexBridge/preflight", "codexBridge/create", "codexBridge/verify", "codexBridge/checkOperation", "workspace/create", "session/create", "session/prompt", "session/cancel", "session/list", "session/page", "session/projections", "session/modelCatalog", "session/selectModel"]);
 const STREAMS = new Set(["session/follow", "session/control"]);
 
 /** Accept a user-provided local launch URL; never discover one from Desktop internals. */

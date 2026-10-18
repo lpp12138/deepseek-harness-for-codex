@@ -27,7 +27,7 @@ async function rpc(method, params) {
 }
 try {
   const initialized = await rpc("initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "synthetic-bundle-check", version: "1" } });
-  assert.equal(initialized.result.serverInfo.version, "0.4.0-desktop.2");
+  assert.equal(initialized.result.serverInfo.version, "0.5.0-desktop.1");
   child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
   const tools = await rpc("tools/list", {}); assert.equal(tools.result.tools.length, 17);
   const doctor = await rpc("tools/call", { name: "doctor", arguments: {} });

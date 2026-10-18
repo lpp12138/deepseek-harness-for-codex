@@ -1,6 +1,6 @@
 # Desktop 0.2.1-rc.2 protocol baseline
 
-This implementation was compared with public program code and generated contracts inside the installed Desktop 0.2.1-rc.2 package. No user session, credential content, private IPC value, or database was read. Current upstream master is not the compatibility definition.
+This implementation was compared with public program code and generated contracts inside the installed Desktop 0.2.1-rc.2 package. No business session, credential file content, private IPC value, or database was read. New synthetic sessions are inspected only through the public API. Current upstream master is not the compatibility definition.
 
 ## Contracts present in that installation
 
@@ -43,7 +43,7 @@ Responses must be `server-response` with the same rpcId and `result:{ok:true,val
 | `session/modelCatalog` | empty args; configured routable models |
 | `session/selectModel` | `request:{sessionId,provider,model,reasoningEffort?}`; changes session selection and saves the default in the background |
 
-Human approvals travel through the Host's `approval/request` waterfall and its existing answering GUI client. This adapter remains passive. The lifecycle implementation checks the session's projected permission is `workspace-write`, but production dispatch is additionally blocked by the missing per-caller policy bridge; it never sets full access or automatically approves a request.
+Human approvals travel through the Host's `approval/request` waterfall and its existing answering GUI client. This adapter remains passive. The legacy synthetic path checks the session projection is `workspace-write`. Production attach requires the native per-caller Host bridge described below; it never sets full access or automatically approves a request.
 
 The original managed Web adapter uses dot-separated methods, unwrapped payloads and `session.history`; those are intentionally confined to explicit `managed-web`. There is no attach-to-managed fallback.
 
@@ -53,7 +53,7 @@ A run's identifiers and pre-submit cursor are written before prompt submission. 
 
 The native GUI has a focus link, not a verified external session deep link. Return `dsh://open` plus sessionId, and do not advertise token-free HTTP origin as an authenticated browser session.
 
-The normal terminal launch prints an authentication URL that the human can privately save and explicitly authorize. No GUI export entry was found. Real passive attach and model catalog were verified with human approval; real completion, cancellation and follow-up remain untested. No paid task was submitted.
+The normal terminal launch prints an authentication URL that the human can privately save and explicitly authorize. No GUI export entry was found. Real passive attach and model catalog were verified with human approval. One bounded synthetic prompt was accepted by the Host but failed with HTTP 401 from the existing model. The default Host also attempted automatic title generation. No further prompt was submitted. The bridge now pins a deterministic title before prompts, suppressing that additional call. Completion, cancellation and follow-up remain unverified until the human repairs the existing model through Desktop settings.
 
 ## Per-call Codex policy boundary
 
@@ -63,6 +63,12 @@ Standard [MCP roots](https://modelcontextprotocol.io/specification/2025-11-25/cl
 
 The installed DSH session/create contract has no opaque-policy/readRoots/writeRoots input. `dsh-sandbox-policy/lib/index.js` derives workspaceRoot from session cwd. `dsh-sandbox/lib/index.js` resolves workspace-write roots to that workspace plus /tmp and os.tmpdir(). `dsh-fs-sandbox/lib/index.js` fences writeText/editText but preserves LocalFileSystem reads. Those mechanisms do not implement an arbitrary caller's Codex read/write policy. Restricting this MCP process cannot constrain the already-running Host's tool processes.
 
-Version 0.4.0-desktop.2 accepts per-call directory proposals, validates realpath/symlinks, recognizes trusted transport identity/policy and binds persisted sessions to their fingerprints. It never persists raw opaque state. Read/cancel/continuation verify that binding, original-path resolution and exact scope on reuse. Unbound legacy/foreign sessions cannot be adopted.
+The scope layer introduced in 0.4.0-desktop.2 accepts per-call directory proposals, validates realpath/symlinks, recognizes trusted transport identity/policy and binds persisted sessions to their fingerprints. It never persists raw opaque state. Read/cancel/continuation verify that binding, original-path resolution and exact scope on reuse. Unbound legacy/foreign sessions cannot be adopted.
 
-Production `start_run` fails before any workspace/create, session/create or session/prompt. `inspect_access_scope` reports canDispatch=false even with metadata. The missing capability is a DSH execution-side bridge which must receive the intact caller policy and enforce it for every relevant tool process/filesystem operation. It must include explicit lifecycle handling when authority changes. This plugin does not modify Desktop, execute a sandbox launcher, or pretend that prompt/cwd is an enforcement boundary. Synthetic-only policy fixtures are not shipped as a configurable production bypass.
+Version 0.5.0-desktop.1 adds the local Host execution bridge. The official bundle patch must use `insert`, not an override, to introduce its component. New sessions are attached through `workspaceRegistry` and receive a deterministic `sessionTitle.rename` before prompting. Native `turn/end` error/aborted reasons are classified explicitly; authentication errors expose a fixed HTTP 401 diagnostic without Host error text. The dedicated empty preset registers only three scoped file tools and masks inherited tools. A monotonic guard also denies unsupported/unbound/expired executions. Every adapted file operation runs under the unchanged native Codex state; requested bounds narrow it further. There is no shell/PTC/subagent implementation. The bridge's own source and DSH configuration cannot be written through these tools.
+
+The installed Host uses Electron's Node runtime and requires ELECTRON_RUN_AS_NODE=1 for subprocess execution, as documented by dsh-desktop-host and Desktop main source. Preserve only this necessary flag rather than inheriting the Host credential environment. Native initialization failure is a refusal, never a reason to fall back. Diagnostics retain stages and bounded function names, not raw launcher stderr or user values.
+
+Binding verification renews a 90-second lease; expiry cancels owned work. A same-caller policy change cancels and permanently revokes the old binding. Old metadata cannot reactivate it. A different caller cannot revoke another caller's work. MCP restart retains metadata while the live Host retains authority; Host restart currently requires a new scoped session. Host plugin teardown drains owned agents before removing the guard.
+
+Real Host tests with controlled synthetic authority verified allowed read/write, read-only write denial, forbidden read/write, symlink denial, unsupported operation refusal, exactly three visible tools, foreign caller refusal, policy change refusal and irrevocable revocation. Automated native tests additionally prove child-process file-policy inheritance and direct loopback network refusal. These are not evidence of live Codex _meta delivery or paid-model completion/cancel/follow-up acceptance. No unsupported operation may be opened just to pass a test.

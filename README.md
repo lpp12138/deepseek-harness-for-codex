@@ -1,81 +1,73 @@
 # DeepSeek Harness for Codex — Desktop Attach
 
-这是 [Seann0824/deepseek-harness-for-codex](https://github.com/Seann0824/deepseek-harness-for-codex) 的个人 fork，保留 MIT 许可证。默认把 Codex 连接到**已经运行且由用户授权的 DSH Desktop Host**。已验证被动连接与模型目录查询；按调用限制目录的任务派发目前因 Desktop 执行侧缺少策略接口而阻止。人工审批仍在 Desktop GUI 中处理。
+[上游](https://github.com/Seann0824/deepseek-harness-for-codex)的个人 MIT fork。Codex 插件 `0.5.0-desktop.1` 配合本地 Host 执行插件 `0.1.0`，连接已配置的 DSH Desktop **0.2.1-rc.2**。不另起 DSH，不修改应用包，不发布 npm 包。
 
-本分支为 `0.4.0-desktop.2`，适配依据是 Desktop **0.2.1-rc.2 安装包中的契约**，不是持续追踪 master。曾通过用户明确批准的连接文件验证真实认证、被动 WebSocket 与模型目录读取；未发送真实模型任务。模拟测试不能代替真实任务验收。本 fork 没有发布 npm 包。
+已验证真实 Host 的认证、被动 WebSocket、模型目录和 12 项文件/身份边界；56 项自动测试通过。一次经授权的合成任务被真实 Host 接受，但现有模型返回 HTTP 401；已停止付费重试，真实模型完成、取消、续接仍未通过。实际 Codex 宿主 metadata 的端到端验收也须单独验证，不能从合成测试推断成功。
 
 ## 安装
 
-需要 Node.js >=22，以及支持插件的 Codex 客户端。插件携带自包含构建，不通过 npx 下载另一个 DSH。
+需要 Node >=22、支持插件与 sandbox metadata 的 Codex、本机 DSH Desktop。
 
 ```sh
 codex plugin marketplace add lpp12138/deepseek-harness-for-codex --ref codex/desktop-attach
 codex plugin add deepseek-harness@deepseek-harness-desktop
 ```
 
-Desktop attach 不采用全局 `DSH_MCP_WORKSPACE_ROOTS` 授权：不同 agent/任务必须分别提交 `accessScope.readRoots` 与 `accessScope.writeRoots`，且 Codex 必须在传输层提供当前调用方策略。安装或更新后新建 Codex 任务加载工具。若保留上游插件作为回滚，请关闭旧插件，避免两个同名 MCP 同时加载。
+在 DSH 官方“插件 → 添加插件”中安装本仓库 `dsh-execution-bridge` 的绝对本地目录并启用。它作为可信代码在共享 Host 内运行，安装前需要用户明确批准。只新增自己的 bundle、依赖及组件；旧配置和其他插件保留。链接安装需要保留该源码目录。安装或更新 Codex 插件后新开 Codex 任务加载工具；旧的上游插件应保持停用，避免同名 MCP 重复加载。
 
-## 认证：需要用户明确批准的连接文件
+## 连接授权
 
-1. 用户必须通过受支持的入口取得现有 Host 的授权连接地址。文件内容只能是一行 `http://127.0.0.1:<当前端口>/connect?token=<已授权的启动令牌>`，也接受 loopback HTTPS/IPv6。端口来自用户提供的地址，不固定端口。
-2. 用户自行把地址保存到本地文件，并限制文件权限（例如 `chmod 600 /absolute/approved-connection.txt`）。不要把地址或令牌粘贴进聊天、命令参数、Git 或 Codex 配置。
-3. 用户提供该文件路径，并明确批准插件读取该文件、把 URL 发送到指定 loopback `/connect`、创建一个 API Peer。然后 Codex 才可调用 `connect_desktop`。提供文件路径的权限不会自动延伸到其他凭据或文件。
-4. 插件以 `interactions=none` 交换 Cookie，并保持 `/api/remote.mux` WebSocket。令牌和 Cookie 都不落盘、不出现在结果中。Cookie 对 Host 是 owner 身份；插件自身另行限制项目和会话范围。断线后凭据立即从插件内存失效，需要明确重新连接。
+由用户自行保存正常终端启动 Desktop 时显示的授权地址，转换成一行 loopback `/connect?token=...` URL，放入权限为 `0600` 的本地文件。用户明确批准文件路径和对指定 loopback Host 的连接后，才调用 `connect_desktop`。不要把真实 URL/token 放入聊天、命令参数、Git 或 Codex 配置。
 
-**连接入口：**此 Desktop 版本正常从终端启动时会在该终端显示启动认证地址，可由用户自行保存为上述文件；未发现 GUI 内的外部客户端导出入口。不能因用户安装了插件就假定取得了连接权限。没有用户提供并批准的连接文件时 `doctor` 只报告缺项。插件不会从私有 IPC、日志、环境、会话目录、凭据文件或数据库发现 token，也不会抓取浏览器 Cookie、伪造 Cookie、关闭认证或另起 Web 服务。用户不需要为“检查接口”重新配置模型。
+插件仅通过指定文件读取地址，以 `interactions=none` 交换内存 Cookie，保持 `/api/remote.mux` WebSocket。不搜索私有 IPC、日志、环境、凭据、会话目录、数据库或浏览器存储以发现 token；不保存或返回 Cookie。连接失效时请用户正常保存新的地址，不自动提取。
 
-## 不同 agent 的目录范围
+## 每个 agent 的权限
 
-`start_run` 与 `inspect_access_scope` 接受本次调用的请求范围，例如：
+MCP 名称是 `deepseek-harness`。每次 `inspect_access_scope` / `start_run` 都带本次请求范围：
 
 ```json
 {
   "workspace": "/absolute/project",
   "accessScope": {
-    "readRoots": ["/absolute/project", "/absolute/shared-reference"],
+    "readRoots": ["/absolute/project", "/absolute/reference"],
     "writeRoots": ["/absolute/project"]
   }
 }
 ```
 
-这些路径由 agent 提出，**不是权限证明**。插件声明 Codex 的实验能力 `codex/sandbox-state`（兼容旧名 `codex/sandbox-state-meta`），仅从工具调用传输层 `_meta` 接收宿主的 `threadId`、`sessionId` 和完整 opaque policy。模型参数内伪造的 `_meta`、MCP `roots/list`、`cwd` 以及全局环境变量都不能授权。缺少可信上下文时拒绝，不猜测默认权限。不会拆解并重建 opaque policy；未知字段也影响策略指纹。
+路径只是请求，不是授权。Codex 必须在工具调用传输层 `_meta` 提供 `threadId`、`sessionId`、完整 `codex/sandbox-state`（兼容旧别名）和 `codex/sandbox-launcher.codexExecutable`。模型参数中的 `_meta`、MCP roots、cwd 和全局 `DSH_MCP_WORKSPACE_ROOTS` 均不能授予权限。
 
-范围规范化检查绝对目录、`realpath`、符号链接实际目标，并区分读与写。会话元数据绑定调用方、策略和范围指纹；观察、取消、续接均重新核对，原路径的实际目标发生变化也会拒绝。不同调用方、变更策略或变更范围不能复用旧会话；未绑定的历史/外来会话不能自动收养。MCP 重启保留元数据，不保留提示词、结果或凭据。
+宿主策略原样传给宿主提供的绝对 Codex launcher：`codex sandbox --sandbox-state-json`。不拆解重建权限列表，不丢弃未知字段，不经 PATH 猜 launcher，也没有不受约束的回退。当前只支持 `managed/restricted` 文件系统策略，其他形式拒绝。
 
-**当前阻塞：**Desktop 0.2.1-rc.2 的 `session/create` 只有 workspace/cwd，没有接收 Codex 逐调用策略或多组读写目录的入口。它的 `workspace-write` 文件层写入限制为 cwd 和临时目录，文件读取并不等同于 Codex 的读取限制。对已运行的 Desktop Host，仅包装 MCP 进程无法约束 Host 的工具进程。提示词声明目录不构成隔离。
+首版只开放 `codex_read`、`codex_write`、`codex_list`。路径解析、读取、列表和原子写入都发生在原生沙箱子进程中，请求范围进一步收窄访问。读写上限为 64 KiB，列表最多 100 项。shell、PTC、终端、子智能体、插件管理和其他工具全部拒绝。模型工具不能改写执行插件自身或 DSH 配置。Electron 的 Node 模式只保留官方必要运行标志，不继承 Host 凭据环境。
 
-因此 `inspect_access_scope` 在收到可信上下文后仍返回 `canDispatch:false`、`desktopPolicyEnforcement:"unavailable"`；`start_run` 在创建 workspace/session 或发送 prompt **之前**拒绝。完整方案需要 DSH 执行侧接收并执行当前调用方的完整策略；本 fork 没有修改 Desktop，也没有通过 managed-web 绕过此阻塞。Codex 端真实逐调用 metadata 是否送达，仍需在加载新版插件的新任务中验证；合成传输测试已通过。
+会话绑定调用者、完整策略与 canonical 范围。每次观察、取消、续接重新检查原路径的 realpath；不同调用者不能控制旧会话，策略变化会取消并永久撤销旧绑定。不能通过旧 metadata 恢复它；新范围使用新会话。未绑定的历史、外来或空白会话不能自动收养。
 
-现存生命周期实现的完成、取消、续接和恢复仅通过合成 Host 验证，当前生产派发保持关闭。将来接入原生执行边界后仍须显示 [打开 Desktop](dsh://open) 与 sessionId；该链接只聚焦应用，用户在 GUI 选择会话，不能伪称 session 深链。所有收费真实任务需要另行明确授权。
+## 调用顺序
 
-## 工具与模式
+1. `doctor`，在已有明确授权时 `connect_desktop`。
+2. `inspect_access_scope`。只有原生 Host 预检返回 `canDispatch:true` 才能继续；缺少可信 metadata、launcher、执行插件或受支持策略时拒绝。
+3. 用户已授权模型工作及相关费用后，`start_run` 发送一次任务。新会话可用 `maxOutputTokens`（32–8192）限制输出，不改变默认模型。桥接会话使用确定性标题并挂到正常工作区，避免额外的自动标题模型调用。不要为失败或不确定提交自动重发任务。
+4. 显示 [打开 Desktop](dsh://open) 和 sessionId。此链接只聚焦应用，用户在列表选择会话；去除 token 的 HTTP origin 不是已认证会话深链。
+5. 用 `wait_run` / `get_run` 观察；至少每 30 秒观察一次以续期 90 秒执行租约。无人续期时 Host 取消自有 turn，阻止孤立任务继续执行工具。
+6. `cancel_run` 取消当前 turn。完成或取消后，同一调用者及同一策略可向 `start_run` 传相同 sessionId 续接。人工审批仍在 GUI，不由插件代答。
+7. 独立检查实际文件变化。DSH 不具备 shell/测试命令工具时，由原 Codex 调用者在自己的权限范围内验证。
 
-| 工具 | Desktop attach 行为 |
-| --- | --- |
-| `doctor` | 只读本机运行前提和连接状态，不读取连接文件、不探测凭据 |
-| `inspect_access_scope` | 检查本次请求范围与宿主上下文；当前报告缺少 DSH 原生执行边界，不触碰 Host |
-| `connect_desktop` | 用户批准后，读取一个指定文件并建立被动 API Peer |
-| `start_service` / `list_services` | 检查或列出已有 Host 的附件，不启动 DSH |
-| `open_service` | 仅在用户要求时聚焦 Desktop |
-| `stop_service` | 只断开插件自己的 Peer；不停止 Desktop、不取消其任务 |
-| `start_run` / `get_run` / `wait_run` / `list_runs` | 派发当前阻止；其余操作只接受同一调用方与策略绑定的会话 |
-| `read_session` | 仅对同一调用方与策略绑定的已派发会话读状态与分页历史 |
-| `get_run_events` / `get_run_control` | 读取该会话的 follow 流或 control 投影；follow 可能物化该会话 |
-| `cancel_run` | 取消当前 turn |
-| `list_models` | 查询 Host 已配置的模型目录，服务商可能刷新目录 |
-| `select_model` | 仅在用户明确要求时选择空闲会话模型；Host 同时会后台保存为新会话默认值 |
+MCP 重启保留 run/session/requestId 和范围指纹，Host 仍存活且调用者相同时可继续。Host 重启会失去内存绑定；当前版本需要新建 scoped session，不自动采用旧会话。`stop_service` / MCP 关闭只断开本客户端，不停止 Desktop；自有任务仍受租约控制。
 
-`DSH_MCP_MODE=desktop-attach` 为默认值。`managed-web` 是显式选择的旧模式，使用上游固定的 `@deepseek-ai/dsh@0.1.0-rc.6`；不会因 attach 失败而自动启用。旧模式仍支持上游 `DSH_MCP_WORKSPACE_ROOTS` 等环境变量，但其旧协议不能当作 Desktop 0.2.1 的协议。
+`read_session`、`get_run_events`、`get_run_control` 仅观察绑定会话。`list_models` 不提交生成。`select_model` 仅在用户明确要求时使用，它会影响 Desktop 的新会话默认模型。
 
-`DSH_MCP_DATA_DIR` 指定插件元数据目录，默认采用 Codex `PLUGIN_DATA` 或 `~/.deep-seek-harness-mcp`。`desktop-runs/` 每个运行一个原子写入的元数据文件（不含提示词、结果、token、Cookie），`desktop-locks/` 防止同一数据目录下的 MCP 客户端并发控制同一会话。其他程序和 GUI 独立发起的操作仍由 Host 管理；插件不能给远端 API 增加事务锁。
+## 模式、存储和回滚
 
-## 开发和验证
+默认 `desktop-attach`。显式旧 `managed-web` 保留上游固定 runtime 和原有全局目录配置，不能用于绕过 attach 的认证或权限拒绝。
+
+插件的持久元数据目录采用 `DSH_MCP_DATA_DIR`、Codex `PLUGIN_DATA` 或 `~/.deep-seek-harness-mcp`，不写入提示词、结果、原始策略、token 或 Cookie。绑定策略只留在 Host 内存。元数据中的会话锁不约束用户在 GUI 的独立操作。
+
+回滚时在 DSH 官方插件管理器关闭或卸载 `@lpp12138/dsh-codex-policy-bridge`；它会先停止并清理自己的 agents，再移除保护。保留 manifest 备份用于差异核对，不覆盖用户后续新增配置。Codex 旧版缓存可保留，但不要启用两个同名 MCP。不要修改 Codex 数据库。
 
 ```sh
-npm ci --ignore-scripts
+npm ci --ignore-scripts --legacy-peer-deps
 npm run check
 ```
 
-测试中的 Host、端口、凭据、模型和会话都是合成数据，不连接真实 Desktop、不调用模型。构建一次生成 `plugins/deepseek-harness/dist/bin.mjs`，依赖已打包以支持 Git 插件安装。修改源码后应同时更新这个构建文件。
-
-接口差异与验收边界见 [Desktop 协议说明](docs/desktop-protocol.md)。
+原生 Mac 测试只访问自建 canary，需要本机 Codex launcher；其他环境可运行合成测试。构建输出包括自包含 MCP bundle 和小型 Host bundle。见[协议说明](docs/desktop-protocol.md)。

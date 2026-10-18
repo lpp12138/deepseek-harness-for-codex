@@ -55,6 +55,22 @@ describe("Desktop attach lifecycle", () => {
     expect(m.listServices()[0]?.status).toBe("running");
     expect(host.sessions.has(run.sessionId)).toBe(true);
   });
+  it("reads native message payloads and classifies native turn-end authentication failures safely", async () => {
+    const m = make(); await m.connectDesktop({ connectionFile });
+    const first = await m.start({ workspace, task: "keep running" });
+    const session = host.sessions.get(first.sessionId)!;
+    session.events.push({ seq: session.events.length, type: "assistant/message", data: { role: "assistant", content: [{ type: "text", text: "NATIVE_OK" }] } });
+    session.events.push({ seq: session.events.length, type: "turn/end", data: { reason: { kind: "stop" } } });
+    session.running = false;
+    expect((await m.get(first.runId)).assistantText).toBe("NATIVE_OK");
+    const next = await m.start({ workspace, sessionId: first.sessionId, task: "keep running" });
+    session.events.push({ seq: session.events.length, type: "turn/end", data: { reason: { kind: "error", error: { code: "AUTH", status: 401, message: "PRIVATE_CREDENTIAL_FRAGMENT" } } } });
+    session.running = false;
+    const failed = await m.get(next.runId);
+    expect(failed.status).toBe("failed");
+    expect(failed.error).toContain("HTTP 401");
+    expect(JSON.stringify(failed)).not.toContain("PRIVATE_CREDENTIAL_FRAGMENT");
+  });
   it("keeps sessionId, requestId and GUI entry across MCP restarts without storing prompts, results or secrets", async () => {
     const m = make(); await m.connectDesktop({ connectionFile });
     const run = await m.start({ workspace, task: "private synthetic task keep running" });

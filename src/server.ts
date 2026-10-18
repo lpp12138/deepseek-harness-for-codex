@@ -28,11 +28,11 @@ function failure(error: unknown) {
 /** Creates the MCP tool surface over a local run manager. */
 export function createMcpServer(manager: RunManager | DesktopAttachManager = createRunManager()): McpServer {
   const server = new McpServer(
-    { name: "deepseek-harness-for-codex", version: "0.4.0-desktop.2" },
+    { name: "deepseek-harness-for-codex", version: "0.5.0-desktop.1" },
     {
       capabilities: { experimental: { "codex/sandbox-state": {}, "codex/sandbox-state-meta": {} } },
       instructions:
-        "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Before dispatch call inspect_access_scope with this caller's requested read/write directories. Paths in arguments, MCP roots and cwd are not permission grants. Current Desktop lacks execution-side Codex policy support and dispatch is blocked; never bypass this with managed-web or another tool. Independently review changes. Only open a GUI on user request.",
+        "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Before dispatch call inspect_access_scope with this caller's requested read/write directories. Paths in arguments, MCP roots and cwd are not permission grants. Dispatch requires a successful native execution-bridge preflight and user authorization for model work. Only adapted file tools are supported; never bypass a refusal with managed-web or another tool. Independently review changes. Only open a GUI on user request.",
     },
   );
 
@@ -101,7 +101,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       const runtime = inspectRuntime();
       if (manager instanceof DesktopAttachManager) {
         const connection = manager.connectionStatus();
-        return result({ ...runtime, ready: false, desktop: connection, missing: [...(connection.connected ? [] : ["user-approved connection file; call connect_desktop"]), "per-call trusted Codex metadata and native DSH execution-side policy bridge; call inspect_access_scope"] });
+        return result({ ...runtime, ready: false, desktop: connection, missing: [...(connection.connected ? [] : ["user-approved connection file; call connect_desktop"]), "per-call host metadata and successful inspect_access_scope with the native Host execution bridge"] });
       }
       return result(runtime);
     },
@@ -113,6 +113,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       title: "Start a local DeepSeek Harness run",
       description: "Start or reuse the Harness Web UI, then create a new session or continue a completed session selected by Codex. Returns runId, sessionId, sessionReused, and webUrl.",
       inputSchema: {
+        ...(manager instanceof DesktopAttachManager ? { maxOutputTokens: z.number().int().min(32).max(8192).optional().describe("Optional per-session output-token cap for a new scoped session; does not change the Desktop default model.") } : {}),
         task: z.string().min(1).max(100_000).describe("Complete implementation task, constraints, and acceptance checks for DeepSeek Harness."),
         workspace: z.string().min(1).describe("Absolute path of the repository DeepSeek Harness may inspect and modify."),
         ...(manager instanceof DesktopAttachManager ? { accessScope: accessScopeSchema } : {}),
@@ -200,7 +201,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
   if (manager instanceof DesktopAttachManager) {
     server.registerTool("inspect_access_scope", {
       title: "Check this caller’s requested directory scope",
-      description: "Local preflight only: validate per-call read/write directory proposals and host-supplied Codex sandbox metadata. No Desktop connection or task. Current Desktop cannot enforce the opaque caller policy, so canDispatch is false. Never treat model declarations, MCP roots, cwd or global env roots as authority.",
+      description: "Preflight this caller's directory proposals and host-supplied Codex sandbox metadata through the already authorized Desktop Host. Runs only a native sandbox ping, without a model task. Missing or unsupported policy keeps canDispatch false. Model declarations, MCP roots, cwd and global env roots are not authority.",
       inputSchema: { workspace: z.string().min(1), accessScope: accessScopeSchema },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     }, async (input, extra) => { try { return result(await manager.inspectAccessScope(input, extra._meta)); } catch (error) { return failure(error); } });

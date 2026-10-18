@@ -1,15 +1,15 @@
 {
   "name": "deepseek-harness",
-  "version": "0.4.0-desktop.2",
-  "description": "Inspect per-call Codex policy and explicitly authorized passive Desktop connection; task dispatch awaits native policy enforcement.",
+  "version": "0.5.0-desktop.1",
+  "description": "Attach to an authorized Desktop Host with per-caller native Codex sandbox filesystem tools.",
   "author": {
     "name": "DeepSeek Harness for Codex contributors"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "DeepSeek Harness Desktop Attach",
-    "shortDescription": "Check caller scope and existing Desktop connection.",
-    "longDescription": "Connect passively to an explicitly authorized existing Desktop Host and inspect each caller’s requested directory scope. Task dispatch is blocked until Desktop can enforce the current Codex sandbox policy.",
+    "shortDescription": "Delegate with per-caller native filesystem policy.",
+    "longDescription": "Use an explicitly authorized existing Desktop Host and a local execution bridge. Inherit the calling Codex policy unchanged for adapted file tools; reject all unsupported tools and policies.",
     "developerName": "DeepSeek Harness for Codex contributors",
     "category": "Developer Tools",
     "brandColor": "#19DDEB",
@@ -17,10 +17,10 @@
     "logo": "./assets/icon.png",
     "capabilities": [
       "Existing Desktop Host",
-      "Per-call scope preflight",
+      "Native Codex filesystem policy",
       "Human GUI approvals"
     ],
-    "defaultPrompt": "Check Desktop attach readiness and inspect_access_scope for this agent’s requested read/write directories. Use host-supplied transport metadata as authority. Explain any missing DSH execution boundary and do not bypass it. Connect only with a file I explicitly approve."
+    "defaultPrompt": "Check doctor, connect only with my approved file, and inspect_access_scope for this agent’s requested read/write directories. Use host-supplied policy and launcher metadata. Dispatch only when native preflight succeeds and model work is authorized; show dsh://open and sessionId."
   },
   "mcpServers": "./.mcp.json"
 }

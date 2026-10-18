@@ -7,6 +7,7 @@ export interface ScopeInput { workspace: string; accessScope?: DirectoryScope | 
 export type CallerMetadata = Record<string, unknown> | undefined;
 export interface CanonicalScope extends DirectoryScope { workspace: string }
 export interface CallerScopeBinding {
+  desktopSessionId?: string;
   callerFingerprint: string;
   policyFingerprint: string;
   scopeFingerprint: string;

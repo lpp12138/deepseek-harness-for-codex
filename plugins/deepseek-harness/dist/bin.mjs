@@ -10282,6 +10282,13 @@ var wrapper_default = import_websocket.default;
 const DESKTOP_GUI_URL = "dsh://open";
 const RECONNECT = "Desktop is not connected. Use connect_desktop with a connection file explicitly supplied and approved by the user.";
 const METHODS = /* @__PURE__ */ new Set([
+	"pluginManager/listBundles",
+	"pluginManager/setBundleEnabled",
+	"codexBridge/status",
+	"codexBridge/preflight",
+	"codexBridge/create",
+	"codexBridge/verify",
+	"codexBridge/checkOperation",
 	"workspace/create",
 	"session/create",
 	"session/prompt",
@@ -10725,7 +10732,7 @@ function inspectRuntime(env = process.env) {
 			dataDirectory: resolveDataDirectory(env),
 			directoryScope: "per-call proposal plus trusted Codex transport metadata",
 			globalRootsAreAuthority: false,
-			desktopPolicyEnforcement: "unavailable",
+			desktopPolicyEnforcement: "requires per-call native bridge preflight",
 			surface: "desktop",
 			authentication: "explicit connect_desktop; memory-only API Cookie",
 			interactions: "none",
@@ -10851,6 +10858,104 @@ var DesktopScopePolicy = class {
 };
 
 //#endregion
+//#region src/dsh-bridge/native.ts
+/** Only host transport metadata reaches this function; never tool arguments. */
+async function nativeAuthority(meta) {
+	const authority = {
+		state: meta?.["codex/sandbox-state"] ?? meta?.["codex/sandbox-state-meta"],
+		launcher: (meta?.["codex/sandbox-launcher"])?.codexExecutable
+	};
+	await validateAuthority(authority);
+	return authority;
+}
+async function validateAuthority(value) {
+	const profile = (value?.state)?.permissionProfile;
+	if (!profile || profile.type !== "managed" || profile.file_system?.type !== "restricted") throw new Error("Only native managed/restricted Codex policy is supported; disabled, external and unknown enforcement are refused.");
+	if (typeof value.launcher !== "string" || !isAbsolute(value.launcher) || !(await stat(value.launcher)).isFile()) throw new Error("Missing host-verified absolute Codex sandbox launcher; no PATH lookup or unconfined fallback.");
+}
+const WORKER = String.raw`
+import fs from 'node:fs/promises';
+import path from 'node:path';
+const chunks=[]; for await(const c of process.stdin) chunks.push(c);
+const {scope,operation:op,protectedRoots=[]}=JSON.parse(Buffer.concat(chunks).toString());
+const under=(root,target)=>{const r=path.relative(root,target); return r===''||(r!=='..'&&!r.startsWith('../')&&!path.isAbsolute(r));};
+async function canonical(p){const abs=path.resolve(scope.workspace,p); try{return await fs.realpath(abs);}catch(e){if(e.code!=='ENOENT')throw e; const parent=path.dirname(abs); if(parent===abs)throw e; return path.join(await canonical(parent),path.basename(abs));}}
+try{
+ if(op.kind==='ping'){console.log(JSON.stringify({ok:true,value:{sandboxApplied:true}}));process.exit(0);}
+ const target=await canonical(op.path);
+ if(op.kind==='write'&&protectedRoots.some(root=>under(process.platform==='darwin'?root.toLowerCase():root,process.platform==='darwin'?target.toLowerCase():target)))throw Object.assign(new Error(),{code:'RUNTIME_CODE_PROTECTED'});
+ const roots=op.kind==='write'?scope.writeRoots:[...scope.readRoots,...scope.writeRoots];
+ if(!roots.some(root=>under(root,target)))throw Object.assign(new Error(),{code:'REQUESTED_SCOPE_DENIED'});
+ let value;
+ if(op.kind==='read'){const s=await fs.stat(target); if(!s.isFile()||s.size>65536)throw Object.assign(new Error(),{code:'FILE_SIZE_OR_TYPE'});value=await fs.readFile(target,'utf8');}
+ else if(op.kind==='list'){value=(await fs.readdir(target,{withFileTypes:true})).slice(0,100).map(e=>({name:e.name,directory:e.isDirectory()}));}
+ else if(op.kind==='write'){
+  if(typeof op.text!=='string'||Buffer.byteLength(op.text)>65536)throw Object.assign(new Error(),{code:'FILE_SIZE_OR_TYPE'});
+  const temporary=path.join(path.dirname(target),'.codex-bridge-'+process.pid+'-'+Date.now()+'.tmp');
+  try{await fs.writeFile(temporary,op.text,{flag:'wx',mode:0o600});await fs.rename(temporary,target);}finally{await fs.unlink(temporary).catch(()=>{});}
+  value={written:true};
+ }else throw Object.assign(new Error(),{code:'UNSUPPORTED_OPERATION'});
+ console.log(JSON.stringify({ok:true,value}));
+}catch(e){console.log(JSON.stringify({ok:false,code:typeof e.code==='string'&&/^[A-Z_0-9]+$/.test(e.code)?e.code:'OPERATION_FAILED'}));}
+`;
+
+//#endregion
+//#region src/desktop-bridge-policy.ts
+/** Production admission requires the installed execution bridge, never an env bypass. */
+var DesktopBridgePolicy = class extends DesktopScopePolicy {
+	client;
+	constructor(client) {
+		super();
+		this.client = client;
+	}
+	async inspect(input, meta) {
+		const base = {
+			callerContextReceived: true,
+			canDispatch: false,
+			desktopPolicyEnforcement: "unavailable",
+			globalRootsAreAuthority: false,
+			requestedScope: (await this.prepare(input, meta)).canonical,
+			missing: ""
+		};
+		try {
+			await nativeAuthority(meta);
+			if (!this.client.status().connected) throw new Error("Connect the explicitly approved existing Desktop first.");
+			const checked = await this.client.rpc("codexBridge/preflight", { request: {
+				input,
+				metadata: meta
+			} });
+			if (checked.canDispatch !== true || checked.desktopPolicyEnforcement !== "native-codex-files") throw new Error("Native execution bridge did not confirm confinement.");
+			return {
+				...base,
+				...checked,
+				missing: ""
+			};
+		} catch (error) {
+			return {
+				...base,
+				missing: error instanceof Error ? error.message : "Native execution bridge unavailable."
+			};
+		}
+	}
+	async authorize(input, meta) {
+		const checked = await this.inspect(input, meta);
+		if (!checked.canDispatch) throw new Error(`Desktop cannot apply the current caller policy: ${checked.missing} No DSH session or task was submitted.`);
+		return this.prepare(input, meta);
+	}
+	async verifyStored(binding, meta) {
+		const identity = callerIdentity(meta);
+		if (!binding || identity.callerFingerprint !== binding.callerFingerprint) return super.verifyStored(binding, meta);
+		if (!binding.desktopSessionId) throw new Error("Session has no native bridge identity; legacy sessions cannot be adopted.");
+		await this.client.rpc("codexBridge/verify", { request: {
+			sessionId: binding.desktopSessionId,
+			input: binding.requested,
+			metadata: meta
+		} });
+		await super.verifyStored(binding, meta);
+	}
+};
+
+//#endregion
 //#region src/desktop-manager.ts
 /** Attaches to an existing Host. No branch in this class launches or stops DSH. */
 var DesktopAttachManager = class {
@@ -10869,7 +10974,7 @@ var DesktopAttachManager = class {
 		this.client = options.client ?? new DesktopClient();
 		this.store = new DesktopStore(resolve(options.dataDirectory ?? resolveDataDirectory()));
 		this.roots = options.allowedRoots ?? [];
-		this.scopePolicy = options.scopePolicy ?? new DesktopScopePolicy();
+		this.scopePolicy = options.scopePolicy ?? new DesktopBridgePolicy(this.client);
 		this.pollIntervalMs = options.pollIntervalMs ?? 500;
 		this.opener = options.openBrowser ?? (async (url) => {
 			if (process.platform !== "darwin") throw new Error("Open Desktop manually and select the returned sessionId.");
@@ -10956,14 +11061,18 @@ var DesktopAttachManager = class {
 			if ((await this.knownSession(workspace, sessionId, meta)).callerScope.scopeFingerprint !== callerScope.scopeFingerprint) throw new Error("Requested scope changed; an existing session cannot be reused under different directory bounds.");
 		} else {
 			const created = await this.client.rpc("workspace/create", { request: { path: workspace } });
-			sessionId = (await this.client.rpc("session/create", { request: { workspaceId: created.workspace.workspaceId } })).sessionId;
+			sessionId = (this.scopePolicy instanceof DesktopBridgePolicy ? await this.client.rpc("codexBridge/create", { request: {
+				input,
+				metadata: meta
+			} }) : await this.client.rpc("session/create", { request: { workspaceId: created.workspace.workspaceId } })).sessionId;
 		}
+		callerScope.desktopSessionId = sessionId;
 		const runId = randomUUID();
 		const release = await this.store.acquire(workspace, sessionId, runId);
 		try {
 			const summary = await this.summary(workspace, sessionId);
 			if (summary.running) throw new Error("Desktop session is still running.");
-			if (summary.projections?.values.permissions?.currentValue !== "workspace-write") throw new Error(`Select workspace-write for session ${sessionId} in Desktop GUI before dispatch. Continue with this sessionId after selecting it; this plugin does not expand permissions.`);
+			if (!(this.scopePolicy instanceof DesktopBridgePolicy) && summary.projections?.values.permissions?.currentValue !== "workspace-write") throw new Error(`Select workspace-write for session ${sessionId} in Desktop GUI before dispatch. Continue with this sessionId after selecting it; this plugin does not expand permissions.`);
 			const run = {
 				runId,
 				serviceId: service.serviceId,
@@ -11034,11 +11143,17 @@ var DesktopAttachManager = class {
 			const current = end ? relevant.filter((event) => event.seq <= end.seq) : relevant;
 			run.assistantText = textOf(current);
 			run.lastEventSeq = current.at(-1)?.seq ?? run.startEventSeq;
-			if (current.find((event) => event.type === "agent/error")) {
+			if (current.find((event) => event.type === "agent/error") || end?.data?.reason?.kind === "error") {
 				run.status = "failed";
-				run.error = "Desktop reported an agent error; inspect the same GUI session.";
+				const failure = end?.data?.reason?.error;
+				run.error = failure?.code === "AUTH" || failure?.status === 401 ? "Desktop model authentication failed (HTTP 401). Repair the existing model in Desktop settings; no task was automatically retried." : "Desktop reported an agent error; inspect the same GUI session.";
+				if (end) run.endEventSeq = end.seq;
 			} else if (end) {
-				run.status = run.cancelRequested ? "cancelled" : "succeeded";
+				run.status = run.cancelRequested || [
+					"cancelled",
+					"cancel",
+					"aborted"
+				].includes(end.data?.reason?.kind) ? "cancelled" : "succeeded";
 				run.endEventSeq = end.seq;
 				run.error = null;
 			} else if (run.cancelRequested && !summary.running) {
@@ -11218,7 +11333,7 @@ var DesktopAttachManager = class {
 };
 function textOf(events) {
 	return events.filter((event) => event.type === "assistant/message").flatMap((event) => {
-		const content = event.data?.message?.content;
+		const content = (event.data?.message ?? event.data)?.content;
 		return Array.isArray(content) ? content.filter((block) => block?.type === "text" && typeof block.text === "string").map((block) => block.text) : [];
 	}).join("\n");
 }
@@ -25209,13 +25324,13 @@ function failure(error) {
 function createMcpServer(manager = createRunManager()) {
 	const server = new McpServer({
 		name: "deepseek-harness-for-codex",
-		version: "0.4.0-desktop.2"
+		version: "0.5.0-desktop.1"
 	}, {
 		capabilities: { experimental: {
 			"codex/sandbox-state": {},
 			"codex/sandbox-state-meta": {}
 		} },
-		instructions: "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Before dispatch call inspect_access_scope with this caller's requested read/write directories. Paths in arguments, MCP roots and cwd are not permission grants. Current Desktop lacks execution-side Codex policy support and dispatch is blocked; never bypass this with managed-web or another tool. Independently review changes. Only open a GUI on user request."
+		instructions: "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Before dispatch call inspect_access_scope with this caller's requested read/write directories. Paths in arguments, MCP roots and cwd are not permission grants. Dispatch requires a successful native execution-bridge preflight and user authorization for model work. Only adapted file tools are supported; never bypass a refusal with managed-web or another tool. Independently review changes. Only open a GUI on user request."
 	});
 	server.registerTool("start_service", {
 		title: "Start the local DeepSeek Harness Web UI",
@@ -25300,7 +25415,7 @@ function createMcpServer(manager = createRunManager()) {
 				...runtime,
 				ready: false,
 				desktop: connection,
-				missing: [...connection.connected ? [] : ["user-approved connection file; call connect_desktop"], "per-call trusted Codex metadata and native DSH execution-side policy bridge; call inspect_access_scope"]
+				missing: [...connection.connected ? [] : ["user-approved connection file; call connect_desktop"], "per-call host metadata and successful inspect_access_scope with the native Host execution bridge"]
 			});
 		}
 		return result(runtime);
@@ -25309,6 +25424,7 @@ function createMcpServer(manager = createRunManager()) {
 		title: "Start a local DeepSeek Harness run",
 		description: "Start or reuse the Harness Web UI, then create a new session or continue a completed session selected by Codex. Returns runId, sessionId, sessionReused, and webUrl.",
 		inputSchema: {
+			...manager instanceof DesktopAttachManager ? { maxOutputTokens: number().int().min(32).max(8192).optional().describe("Optional per-session output-token cap for a new scoped session; does not change the Desktop default model.") } : {},
 			task: string().min(1).max(1e5).describe("Complete implementation task, constraints, and acceptance checks for DeepSeek Harness."),
 			workspace: string().min(1).describe("Absolute path of the repository DeepSeek Harness may inspect and modify."),
 			...manager instanceof DesktopAttachManager ? { accessScope: accessScopeSchema } : {},
@@ -25402,7 +25518,7 @@ function createMcpServer(manager = createRunManager()) {
 	if (manager instanceof DesktopAttachManager) {
 		server.registerTool("inspect_access_scope", {
 			title: "Check this caller’s requested directory scope",
-			description: "Local preflight only: validate per-call read/write directory proposals and host-supplied Codex sandbox metadata. No Desktop connection or task. Current Desktop cannot enforce the opaque caller policy, so canDispatch is false. Never treat model declarations, MCP roots, cwd or global env roots as authority.",
+			description: "Preflight this caller's directory proposals and host-supplied Codex sandbox metadata through the already authorized Desktop Host. Runs only a native sandbox ping, without a model task. Missing or unsupported policy keeps canDispatch false. Model declarations, MCP roots, cwd and global env roots are not authority.",
 			inputSchema: {
 				workspace: string().min(1),
 				accessScope: accessScopeSchema

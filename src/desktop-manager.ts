@@ -5,6 +5,7 @@ import { spawn } from "node:child_process";
 import { DesktopClient, DESKTOP_GUI_URL } from "./desktop-client.js";
 import { DesktopStore, type DesktopRun } from "./desktop-store.js";
 import { resolveDataDirectory } from "./runtime.js";
+import { DesktopBridgePolicy } from "./desktop-bridge-policy.js";
 import { DesktopScopePolicy, type CallerMetadata } from "./access-scope.js";
 import type { RunSnapshot, ServiceSnapshot, StartRunInput, StartServiceInput } from "./types.js";
 
@@ -41,7 +42,7 @@ export class DesktopAttachManager {
     this.client = options.client ?? new DesktopClient();
     this.store = new DesktopStore(resolve(options.dataDirectory ?? resolveDataDirectory()));
     this.roots = options.allowedRoots ?? [];
-    this.scopePolicy = options.scopePolicy ?? new DesktopScopePolicy();
+    this.scopePolicy = options.scopePolicy ?? new DesktopBridgePolicy(this.client);
     this.pollIntervalMs = options.pollIntervalMs ?? 500;
     this.opener = options.openBrowser ?? (async url => {
       if (process.platform !== "darwin") throw new Error("Open Desktop manually and select the returned sessionId.");
@@ -98,15 +99,18 @@ export class DesktopAttachManager {
     }
     else {
       const created = await this.client.rpc<{ workspace: { workspaceId: string } }>("workspace/create", { request: { path: workspace } });
-      const session = await this.client.rpc<{ sessionId: string }>("session/create", { request: { workspaceId: created.workspace.workspaceId } });
+      const session = this.scopePolicy instanceof DesktopBridgePolicy
+        ? await this.client.rpc<{ sessionId: string }>("codexBridge/create", { request: { input, metadata: meta } })
+        : await this.client.rpc<{ sessionId: string }>("session/create", { request: { workspaceId: created.workspace.workspaceId } });
       sessionId = session.sessionId;
     }
+    callerScope.desktopSessionId = sessionId;
     const runId = randomUUID();
     const release = await this.store.acquire(workspace, sessionId, runId);
     try {
       const summary = await this.summary(workspace, sessionId);
       if (summary.running) throw new Error("Desktop session is still running.");
-      if (summary.projections?.values.permissions?.currentValue !== "workspace-write") throw new Error(`Select workspace-write for session ${sessionId} in Desktop GUI before dispatch. Continue with this sessionId after selecting it; this plugin does not expand permissions.`);
+      if (!(this.scopePolicy instanceof DesktopBridgePolicy) && summary.projections?.values.permissions?.currentValue !== "workspace-write") throw new Error(`Select workspace-write for session ${sessionId} in Desktop GUI before dispatch. Continue with this sessionId after selecting it; this plugin does not expand permissions.`);
       const run: DesktopRun = {
         runId, serviceId: service.serviceId, sessionId, sessionReused: reused, task: input.task.trim(), workspace,
         callerScope, webUrl: service.webUrl!, guiUrl: DESKTOP_GUI_URL, mode: "desktop-attach", requestId: randomUUID(), submissionState: "prepared",
@@ -144,8 +148,17 @@ export class DesktopAttachManager {
       run.assistantText = textOf(current);
       run.lastEventSeq = current.at(-1)?.seq ?? run.startEventSeq;
       const error = current.find(event => event.type === "agent/error");
-      if (error) { run.status = "failed"; run.error = "Desktop reported an agent error; inspect the same GUI session."; }
-      else if (end) { run.status = run.cancelRequested ? "cancelled" : "succeeded"; run.endEventSeq = end.seq; run.error = null; }
+      if (error || end?.data?.reason?.kind === "error") {
+        run.status = "failed";
+        // Host error text can contain credential fragments. Return only a fixed
+        // classification and leave the detailed failure in the user's GUI.
+        const failure = end?.data?.reason?.error;
+        run.error = failure?.code === "AUTH" || failure?.status === 401
+          ? "Desktop model authentication failed (HTTP 401). Repair the existing model in Desktop settings; no task was automatically retried."
+          : "Desktop reported an agent error; inspect the same GUI session.";
+        if (end) run.endEventSeq = end.seq;
+      }
+      else if (end) { run.status = run.cancelRequested || ["cancelled", "cancel", "aborted"].includes(end.data?.reason?.kind) ? "cancelled" : "succeeded"; run.endEventSeq = end.seq; run.error = null; }
       else if (run.cancelRequested && !summary.running) { run.status = "cancelled"; run.error = null; }
       else if (run.submissionState === "accepted") run.error = null;
       if (run.status !== "running") { run.finishedAt ??= new Date().toISOString(); await this.release(run.runId); }
@@ -256,7 +269,7 @@ export class DesktopAttachManager {
 
 function textOf(events: Event[]): string {
   return events.filter(event => event.type === "assistant/message").flatMap(event => {
-    const content = event.data?.message?.content;
+    const content = (event.data?.message ?? event.data)?.content;
     return Array.isArray(content) ? content.filter(block => block?.type === "text" && typeof block.text === "string").map(block => block.text) : [];
   }).join("\n");
 }

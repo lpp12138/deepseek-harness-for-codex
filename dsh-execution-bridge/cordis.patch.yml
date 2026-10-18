@@ -1,0 +1,3 @@
+- insert:
+    - id: codex-policy-bridge
+      name: '@lpp12138/dsh-codex-policy-bridge'

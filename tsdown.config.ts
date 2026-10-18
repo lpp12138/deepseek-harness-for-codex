@@ -6,7 +6,9 @@ export default defineConfig({
   dts: false,
   format: ["esm"],
   minify: false,
-  outDir: "dist",
+  outDir: "plugins/deepseek-harness/dist",
+  deps: { alwaysBundle: [/.*/], onlyBundle: false },
+  shims: true,
   platform: "node",
   target: "node22",
 });

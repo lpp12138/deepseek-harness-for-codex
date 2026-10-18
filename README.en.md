@@ -1,179 +1,53 @@
-# DeepSeek Harness for Codex
+# DeepSeek Harness for Codex — Desktop Attach
 
-<p align="center">
-  <a href="./README.md">简体中文</a> · <strong>English</strong>
-</p>
+A personal fork of [Seann0824/deepseek-harness-for-codex](https://github.com/Seann0824/deepseek-harness-for-codex), retaining the MIT license. Version `0.4.0-desktop.1` defaults to attaching to an existing, explicitly authorized DeepSeek Harness Desktop Host. It keeps configured models and human approvals in Desktop. No npm package was published.
 
-<p align="center">
-  <img src="./assets/icon.png" width="128" alt="DeepSeek Harness for Codex icon">
-</p>
+The protocol baseline is the installed Desktop **0.2.1-rc.2** contract, not an assumption that current master is compatible. Synthetic tests are not a real model or authentication acceptance test.
 
-DeepSeek Harness for Codex lets Codex start [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) locally, return a clickable live-session link, delegate work to it, and then independently review the resulting workspace changes.
+## Installation
 
-![DeepSeek Harness for Codex demo](./imgs/examples.gif)
-
-## Quick start
-
-Use the Codex plugin unless you specifically need a standalone MCP server. The plugin installs both the MCP tools and the instructions that tell Codex to review Harness's work independently.
-
-### 1. Check the requirements
-
-- Node.js 22 or later, including `npx`
-- A Codex client with plugin support
-- A DeepSeek API key
-
-Put the API key in the target repository's ignored `.env` file:
-
-```dotenv
-DEEPSEEK_API_KEY=your-key
-```
-
-Do not commit this file. You can instead provide `DEEPSEEK_API_KEY` to the environment that starts Codex, or configure the key later in the opened Harness page under **Settings → Models**.
-
-### 2. Install the plugin
-
-Copy these two commands into a terminal:
+Requires Node >=22 and a plugin-capable Codex client. The plugin carries a self-contained bundle and does not install another DSH via npx.
 
 ```sh
-codex plugin marketplace add Seann0824/deepseek-harness-for-codex --ref main
-codex plugin add deepseek-harness@deepseek-harness-for-codex
+codex plugin marketplace add lpp12138/deepseek-harness-for-codex --ref codex/desktop-attach
+codex plugin add deepseek-harness@deepseek-harness-desktop
 ```
 
-On macOS, if `codex` is not found or another global installation shadows the desktop client, use the executable bundled with the app:
+Set `DSH_MCP_WORKSPACE_ROOTS` in the installed MCP configuration to explicitly authorized absolute project roots (platform path delimiter). Without roots, dispatch is disabled. Open a new Codex task after installation. Disable an older upstream plugin if retaining it for rollback, so duplicate MCP names do not load.
+
+## Explicit authorization
+
+The human must obtain a connection URL through a supported entry, save it in a private local text file, provide its path, and approve reading that file and sending its URL to the named loopback `/connect` endpoint. The file contains one line such as `http://127.0.0.1:<current-port>/connect?token=<authorized-launch-token>`. Do not paste real tokens into chat, shell arguments, Git, or Codex configuration. Prefer file permissions `0600`.
+
+Only then call `connect_desktop`. The plugin exchanges the URL for a memory-only API Cookie using `interactions=none` and holds its authenticated `/api/remote.mux` socket. The Cookie has Host owner authority; the plugin additionally restricts workspaces and delegated sessions. It never returns or persists the token or Cookie. Disconnect invalidates its in-memory credential; reconnection is explicit.
+
+**Known limitation:** Desktop passes its startup authentication URL to Electron through private Node IPC. A user-facing export/authorize-external-client entry has not been identified. Installation is not authorization to extract that private URL. Without a legally provided URL, `doctor` reports the missing connection and dispatch stops. The plugin does not inspect private IPC, logs, ambient environment, credential/session directories, databases, or browser storage to discover tokens. It does not forge Cookies, disable authentication, start another Web service, or ask the user to reconfigure models merely to inspect interfaces.
+
+## Workflow
+
+1. Run `doctor`. The default is `desktop-attach`, with no managed fallback.
+2. Connect using only a file the human explicitly provided and approved.
+3. `start_run` creates a session in the same Host and sends one prompt with a unique persisted requestId. Its effective permission must be `workspace-write`; otherwise select that permission in GUI and continue the returned blank sessionId.
+4. Display [Open Desktop](dsh://open) and sessionId. This verified native URL focuses the app **without selecting a session**. Select the session in Desktop. `webUrl` is a token-free Host origin, not a promise that an unauthenticated browser can open the session. Do not invent a session deep link.
+5. Use `get_run`/`wait_run`. Human approvals remain in GUI. This client does not subscribe as an answering `$events` client and implements no auto-approval operation.
+6. `cancel_run` cancels the current turn and keeps Desktop/session intact. Continue a completed session with the same sessionId. Locks prevent concurrent control by clients sharing this plugin data directory; Host/GUI operations remain Host-owned.
+7. After an MCP restart, recover identifiers and reconnect explicitly. A lost prompt acknowledgement is reported as uncertain and never automatically replayed. Independently inspect workspace changes and verify results.
+
+`read_session` reads scoped, cold-safe status/history. `get_run_events` reads bounded follow frames (the Host may materialize that delegated session); `get_run_control` returns only that session's projection. `list_models` reads the configured catalog, which providers may refresh. `select_model` requires an explicit user request: Desktop also saves the selection as its new-session default.
+
+`stop_service` in attach mode disconnects only this client's Peer. MCP shutdown does not stop Desktop or cancel its turns. `open_service` focuses Desktop only on user request.
+
+## Modes and storage
+
+`DSH_MCP_MODE=desktop-attach` is the default. Explicit `managed-web` retains upstream's `@deepseek-ai/dsh@0.1.0-rc.6` runtime and legacy protocol; it is never an automatic recovery path and is not the Desktop 0.2.1 protocol.
+
+`DSH_MCP_DATA_DIR` selects plugin metadata storage (Codex `PLUGIN_DATA` or `~/.deep-seek-harness-mcp` by default). Atomic per-run files in `desktop-runs/` retain identifiers, workspace, cursor, status and native GUI entry, without prompts, results or credentials. Per-session locks live in `desktop-locks/` and recover dead owners.
+
+## Development
 
 ```sh
-CODEX_APP_BIN="/Applications/ChatGPT.app/Contents/Resources/codex"
-"$CODEX_APP_BIN" plugin marketplace add Seann0824/deepseek-harness-for-codex --ref main
-"$CODEX_APP_BIN" plugin add deepseek-harness@deepseek-harness-for-codex
-```
-
-### 3. Start a new Codex task
-
-Plugins are loaded when a task starts. Create a new task in Codex and ask it to use DeepSeek Harness, for example:
-
-> Use DeepSeek Harness to implement this change in a visible local session. Do not open my browser automatically; give me the live Harness page link, then review the diff and run the relevant checks yourself.
-
-Codex will start Harness locally, serve its Web page on a free loopback port, return a clickable link, submit the task, follow the visible session, and independently verify the result. The browser does not open automatically; click the link in Codex when you want to watch. You do not need to run Harness or register a separate MCP server.
-
-The first task may download the pinned MCP and Harness npm packages. Later tasks use the local npm cache.
-
-## Migrating from the old name
-
-The project was renamed from `deepseek-harness-mcp` to `deepseek-harness-for-codex`. If you installed the old plugin, remove its plugin and marketplace before following the installation steps above:
-
-```sh
-codex plugin remove deepseek-harness-mcp@deepseek-harness
-codex plugin marketplace remove deepseek-harness
-```
-
-The old npm package is not replaced automatically. The default data directory remains `~/.deep-seek-harness-mcp`, so the new installation can continue using existing local Harness settings and sessions.
-
-## Update
-
-Refresh the marketplace and reinstall the plugin, then start a new Codex task:
-
-```sh
-codex plugin marketplace upgrade deepseek-harness-for-codex
-codex plugin add deepseek-harness@deepseek-harness-for-codex
-```
-
-## Uninstall
-
-```sh
-codex plugin remove deepseek-harness@deepseek-harness-for-codex
-codex plugin marketplace remove deepseek-harness-for-codex
-```
-
-## Standalone MCP installation
-
-Use this only when you need the MCP tools without the plugin's delegation instructions and Codex UI entry:
-
-```sh
-codex mcp add deepseek-harness -- npx --yes --package=deepseek-harness-for-codex@0.3.1 -- deepseek-harness-for-codex
-```
-
-Start a new Codex task after registration.
-
-## How it works
-
-The plugin launches the published MCP server through `npx`. On the first task for a workspace, the MCP server starts `@deepseek-ai/dsh web --port 0` on loopback without opening a browser. Codex creates the workspace and session through Harness's Web API and presents the URL as a clickable link, so opening it shows the same live task that Codex controls. Later tasks reuse that local service. The task does not run on a hosted bridge.
-
-Each run is fresh and asynchronous:
-
-1. Codex calls `start_run` with an absolute workspace and a complete task.
-2. The MCP server starts or reuses Harness Web, submits a visible session, and returns its page URL to Codex.
-3. Codex presents a clickable link; the user opens it when needed while Codex follows the same session with `wait_run` or `get_run`.
-4. Codex inspects the resulting diff and runs its own verification.
-
-## MCP tools
-
-| Tool | Purpose |
-| --- | --- |
-| `doctor` | Check Node, npx, package selection, credential visibility, data location, and workspace restrictions. |
-| `start_service` | Start or reuse Harness Web for a workspace and return its URL without opening the browser by default. |
-| `open_service` | Open a running Harness page when the user explicitly requests it. |
-| `list_services` | List local Harness Web services and URLs. |
-| `stop_service` | Stop a Harness Web service. |
-| `start_run` | Create a new visible session or continue a completed session selected by Codex, then submit a task. |
-| `wait_run` | Wait up to 30 seconds for the visible session. |
-| `get_run` | Read state and assistant text from the Web session. |
-| `list_runs` | List runs owned by the current MCP server process. |
-| `cancel_run` | Cancel the agent turn while keeping Web available. |
-
-Both `start_service` and `start_run` default `openBrowser` to `false`, and the plugin explicitly passes `false`. Codex should render the returned `webUrl` as a clickable link; it should use `open_service` only when the user explicitly asks Codex to open the page.
-
-## Configuration
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `DSH_MCP_DATA_DIR` | `~/.deep-seek-harness-mcp` | Persistent per-workspace Harness Web settings and sessions. |
-| `DSH_MCP_WORKSPACE_ROOTS` | unrestricted | Platform-delimited absolute roots that may be passed to `start_run`. |
-| `DSH_MCP_HARNESS_PACKAGE` | `@deepseek-ai/dsh@0.1.0-rc.6` | Exact npm package used for the local Harness process. |
-| `DSH_MCP_NPX_COMMAND` | `npx` | Alternate path to `npx`. |
-| `DSH_PERMISSION_MODE` | `workspace-write` | DeepSeek Harness permission mode. |
-| `DEEPSEEK_BASE_URL` | provider default | Optional DeepSeek-compatible API endpoint. |
-
-Telemetry is disabled for Harness child processes by default. The Web service binds to loopback and selects a free port. Session data remains in the configured data directory for local audit.
-
-## Security model
-
-`start_run` is a write-capable tool. The server requires an existing absolute workspace, resolves symlinks, uses argv instead of a shell, and can restrict allowed roots with `DSH_MCP_WORKSPACE_ROOTS`. Harness Web stays on loopback. The default permission mode is `workspace-write`; this project does not silently enable unrestricted host access.
-
-## Session model
-
-Every `start_run` lets Codex choose the session. Omitting `sessionId` creates a new visible Harness session. Passing a completed `sessionId` from an earlier run continues that conversation while returning only the new turn's output. A running session cannot be reused concurrently. The Web service is reused for later tasks in the same workspace until `stop_service` or MCP shutdown.
-
-## Local development
-
-Clone this repository, build the npm package, then add the checkout as a local marketplace:
-
-```sh
-npm install
+npm ci --ignore-scripts
 npm run check
-codex plugin marketplace add /absolute/path/to/deepseek-harness-for-codex
-codex plugin add deepseek-harness@deepseek-harness-for-codex
 ```
 
-The installed plugin normally starts the published `deepseek-harness-for-codex@0.3.1` package. During local MCP development, temporarily point the plugin's `.mcp.json` at the absolute `dist/bin.mjs` path.
-
-## Publishing the npm package
-
-This repository publishes the public, unscoped `deepseek-harness-for-codex` package to the official npm registry. `npm publish` automatically runs the typecheck, test, and build gate. The package includes `dist/`, both README files, the demo GIF, `LICENSE`, and the package manifest.
-
-Authenticate and verify the account:
-
-```sh
-npm login --registry=https://registry.npmjs.org/
-npm whoami --registry=https://registry.npmjs.org/
-```
-
-Inspect the release, publish it, and verify the executable:
-
-```sh
-npm run release:check
-npm publish
-npm view deepseek-harness-for-codex version --registry=https://registry.npmjs.org/
-npx --yes --package=deepseek-harness-for-codex@0.3.1 -- deepseek-harness-for-codex
-```
-
-An npm version cannot be overwritten. For later releases, update references in `package.json`, `.mcp.json`, and the MCP server metadata together, then run `npm version patch`, `npm version minor`, or `npm version major` before publishing.
+Tests use synthetic local Hosts, credentials, sessions and models. They never connect to real Desktop or a paid model. Build once into `plugins/deepseek-harness/dist/bin.mjs`; update the tracked self-contained bundle when changing source. See [protocol notes](docs/desktop-protocol.md).

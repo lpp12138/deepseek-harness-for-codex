@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { RunManager } from "./run-manager.js";
+import { createRunManager } from "./manager.js";
 import { createMcpServer } from "./server.js";
 
-const manager = new RunManager();
+const manager = createRunManager();
 const server = createMcpServer(manager);
 const transport = new StdioServerTransport();
 let closing = false;

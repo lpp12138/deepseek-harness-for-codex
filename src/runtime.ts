@@ -4,6 +4,12 @@ import { delimiter, join } from "node:path";
 
 export const DEFAULT_HARNESS_PACKAGE = "@deepseek-ai/dsh@0.1.0-rc.6";
 
+export function resolveMode(env: NodeJS.ProcessEnv = process.env): "desktop-attach" | "managed-web" {
+  const mode = env.DSH_MCP_MODE?.trim() || "desktop-attach";
+  if (mode !== "desktop-attach" && mode !== "managed-web") throw new Error("DSH_MCP_MODE must be desktop-attach or managed-web. No fallback is performed.");
+  return mode;
+}
+
 /** A shell-free command specification for one local Harness process. */
 export interface HarnessCommand {
   command: string;
@@ -61,12 +67,18 @@ export function buildHarnessWebCommand(
 
 /** Returns local prerequisites without making a network request. */
 export function inspectRuntime(env: NodeJS.ProcessEnv = process.env): Record<string, unknown> {
+  const mode = resolveMode(env);
+  if (mode === "desktop-attach") {
+    const supported = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10) >= 22;
+    return { ready: false, mode, nodeVersion: process.versions.node, nodeSupported: supported, platform: process.platform, architecture: process.arch, dataDirectory: resolveDataDirectory(env), allowedWorkspaceRoots: resolveAllowedRoots(env), surface: "desktop", authentication: "explicit connect_desktop; memory-only API Cookie", interactions: "none", permissionMode: "workspace-write", managedFallback: false };
+  }
   const command = env.DSH_MCP_NPX_COMMAND?.trim() || (process.platform === "win32" ? "npx.cmd" : "npx");
   const probe = spawnSync(command, ["--version"], { encoding: "utf8", shell: false, timeout: 5_000 });
   const nodeMajor = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10);
 
   return {
     ready: nodeMajor >= 22 && probe.status === 0,
+    mode,
     nodeVersion: process.versions.node,
     nodeSupported: nodeMajor >= 22,
     platform: process.platform,

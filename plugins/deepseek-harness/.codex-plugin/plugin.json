@@ -1,26 +1,26 @@
 {
   "name": "deepseek-harness",
-  "version": "0.3.1+codex.20260813212556",
-  "description": "Run DeepSeek Harness locally in a visible Web session controlled and reviewed by Codex.",
+  "version": "0.4.0-desktop.1",
+  "description": "Attach Codex to an existing authorized DeepSeek Harness Desktop session, with approvals in the GUI.",
   "author": {
     "name": "DeepSeek Harness for Codex contributors"
   },
   "skills": "./skills/",
   "interface": {
-    "displayName": "DeepSeek Harness for Codex",
-    "shortDescription": "Run and watch a local DeepSeek coding agent.",
-    "longDescription": "Codex starts the local DeepSeek Harness Web UI, returns a clickable live-session link, delegates a scoped coding task, and independently reviews the workspace changes.",
+    "displayName": "DeepSeek Harness Desktop Attach",
+    "shortDescription": "Delegate into your existing Desktop Host.",
+    "longDescription": "Connect to an existing user-authorized Desktop Host. Keep its configured models and human approvals in Desktop GUI. Persist session identifiers and independently review results.",
     "developerName": "DeepSeek Harness for Codex contributors",
     "category": "Developer Tools",
     "brandColor": "#19DDEB",
     "composerIcon": "./assets/icon.png",
     "logo": "./assets/icon.png",
     "capabilities": [
-      "Visible Harness Web UI",
-      "Local agent delegation",
-      "Independent result review"
+      "Existing Desktop Host",
+      "Human GUI approvals",
+      "Persistent session continuation"
     ],
-    "defaultPrompt": "Start the local DeepSeek Harness Web UI without opening my browser, give me its clickable session link, delegate this coding task, then review and verify the result yourself."
+    "defaultPrompt": "Check Desktop attach readiness. Connect only with a connection file I explicitly approve, then delegate in the scoped workspace. Show dsh://open and sessionId, keep approvals in Desktop, and review the actual result."
   },
   "mcpServers": "./.mcp.json"
 }

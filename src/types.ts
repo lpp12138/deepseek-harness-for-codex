@@ -20,6 +20,10 @@ export interface ServiceSnapshot {
 
 /** Public state returned to MCP clients for one visible Web session task. */
 export interface RunSnapshot {
+  mode?: "managed-web" | "desktop-attach";
+  guiUrl?: string;
+  requestId?: string;
+  submissionState?: "prepared" | "accepted" | "uncertain";
   runId: string;
   serviceId: string;
   sessionId: string;

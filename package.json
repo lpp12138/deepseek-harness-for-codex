@@ -1,6 +1,6 @@
 {
   "name": "deepseek-harness-for-codex",
-  "version": "0.4.0-desktop.1",
+  "version": "0.4.0-desktop.2",
   "description": "Codex plugin for user-authorized attachment to an existing DeepSeek Harness Desktop Host.",
   "type": "module",
   "bin": {

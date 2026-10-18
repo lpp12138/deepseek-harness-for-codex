@@ -1,15 +1,15 @@
 {
   "name": "deepseek-harness-for-codex",
-  "version": "0.4.0-desktop.1",
-  "description": "Attach Codex to an existing authorized DeepSeek Harness Desktop session, with approvals in the GUI.",
+  "version": "0.4.0-desktop.2",
+  "description": "Inspect per-call Codex policy and explicitly authorized passive Desktop connection; task dispatch awaits native policy enforcement.",
   "author": {
     "name": "DeepSeek Harness for Codex contributors"
   },
   "skills": "./skills/",
   "interface": {
     "displayName": "DeepSeek Harness Desktop Attach",
-    "shortDescription": "Delegate into your existing Desktop Host.",
-    "longDescription": "Connect to an existing user-authorized Desktop Host. Keep its configured models and human approvals in Desktop GUI. Persist session identifiers and independently review results.",
+    "shortDescription": "Check caller scope and existing Desktop connection.",
+    "longDescription": "Connect passively to an explicitly authorized existing Desktop Host and inspect each caller’s requested directory scope. Task dispatch is blocked until Desktop can enforce the current Codex sandbox policy.",
     "developerName": "DeepSeek Harness for Codex contributors",
     "category": "Developer Tools",
     "brandColor": "#19DDEB",
@@ -17,10 +17,10 @@
     "logo": "./assets/icon.png",
     "capabilities": [
       "Existing Desktop Host",
-      "Human GUI approvals",
-      "Persistent session continuation"
+      "Per-call scope preflight",
+      "Human GUI approvals"
     ],
-    "defaultPrompt": "Check Desktop attach readiness. Connect only with a connection file I explicitly approve, then delegate in the scoped workspace. Show dsh://open and sessionId, keep approvals in Desktop, and review the actual result."
+    "defaultPrompt": "Check Desktop attach readiness and inspect_access_scope for this agent’s requested read/write directories. Use host-supplied transport metadata as authority. Explain any missing DSH execution boundary and do not bypass it. Connect only with a file I explicitly approve."
   },
   "mcpServers": "./.mcp.json"
 }

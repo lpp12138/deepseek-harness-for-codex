@@ -43,7 +43,7 @@ Responses must be `server-response` with the same rpcId and `result:{ok:true,val
 | `session/modelCatalog` | empty args; configured routable models |
 | `session/selectModel` | `request:{sessionId,provider,model,reasoningEffort?}`; changes session selection and saves the default in the background |
 
-Human approvals travel through the Host's `approval/request` waterfall and its existing answering GUI client. This adapter remains passive. Before dispatch it verifies the session's projected permission is `workspace-write`; it never sets full access or automatically approves a request.
+Human approvals travel through the Host's `approval/request` waterfall and its existing answering GUI client. This adapter remains passive. The lifecycle implementation checks the session's projected permission is `workspace-write`, but production dispatch is additionally blocked by the missing per-caller policy bridge; it never sets full access or automatically approves a request.
 
 The original managed Web adapter uses dot-separated methods, unwrapped payloads and `session.history`; those are intentionally confined to explicit `managed-web`. There is no attach-to-managed fallback.
 
@@ -53,4 +53,16 @@ A run's identifiers and pre-submit cursor are written before prompt submission. 
 
 The native GUI has a focus link, not a verified external session deep link. Return `dsh://open` plus sessionId, and do not advertise token-free HTTP origin as an authenticated browser session.
 
-No supported user-facing Desktop launch-token export was identified. Real attach, native GUI synchronization, paid completion, cancellation and follow-up remain unverified until an authorized connection URL is supplied and a bounded real task is approved. Synthetic tests exercise the protocol implementation and failure paths without claiming those acceptance results.
+The normal terminal launch prints an authentication URL that the human can privately save and explicitly authorize. No GUI export entry was found. Real passive attach and model catalog were verified with human approval; real completion, cancellation and follow-up remain untested. No paid task was submitted.
+
+## Per-call Codex policy boundary
+
+Official Codex source documents opt-in experimental capability `codex/sandbox-state` (deprecated alias `codex/sandbox-state-meta`). The Host attaches identity plus opaque policy in tool-call transport `_meta`; unknown fields must not be discarded or reconstructed. Launcher metadata is separate and its absence never permits PATH search or an unsandboxed fallback. See [Codex sandbox metadata](https://github.com/openai/codex/blob/main/codex-rs/codex-mcp/src/sandbox_metadata.rs) and [tool dispatch](https://github.com/openai/codex/blob/main/codex-rs/core/src/mcp_tool_call.rs). The installed Codex binary contains this capability; live delivery to this plugin remains to be tested in a new task. Synthetic MCP transport tests cover delivery and rejection of argument-forged metadata.
+
+Standard [MCP roots](https://modelcontextprotocol.io/specification/2025-11-25/client/roots) have URI/name, not standardized read/write grants or caller identity. This plugin never uses roots or model-declared paths as authority.
+
+The installed DSH session/create contract has no opaque-policy/readRoots/writeRoots input. `dsh-sandbox-policy/lib/index.js` derives workspaceRoot from session cwd. `dsh-sandbox/lib/index.js` resolves workspace-write roots to that workspace plus /tmp and os.tmpdir(). `dsh-fs-sandbox/lib/index.js` fences writeText/editText but preserves LocalFileSystem reads. Those mechanisms do not implement an arbitrary caller's Codex read/write policy. Restricting this MCP process cannot constrain the already-running Host's tool processes.
+
+Version 0.4.0-desktop.2 accepts per-call directory proposals, validates realpath/symlinks, recognizes trusted transport identity/policy and binds persisted sessions to their fingerprints. It never persists raw opaque state. Read/cancel/continuation verify that binding, original-path resolution and exact scope on reuse. Unbound legacy/foreign sessions cannot be adopted.
+
+Production `start_run` fails before any workspace/create, session/create or session/prompt. `inspect_access_scope` reports canDispatch=false even with metadata. The missing capability is a DSH execution-side bridge which must receive the intact caller policy and enforce it for every relevant tool process/filesystem operation. It must include explicit lifecycle handling when authority changes. This plugin does not modify Desktop, execute a sandbox launcher, or pretend that prompt/cwd is an enforcement boundary. Synthetic-only policy fixtures are not shipped as a configurable production bypass.

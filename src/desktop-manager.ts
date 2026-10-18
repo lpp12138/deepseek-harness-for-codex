@@ -4,7 +4,8 @@ import { isAbsolute, relative, resolve } from "node:path";
 import { spawn } from "node:child_process";
 import { DesktopClient, DESKTOP_GUI_URL } from "./desktop-client.js";
 import { DesktopStore, type DesktopRun } from "./desktop-store.js";
-import { resolveAllowedRoots, resolveDataDirectory } from "./runtime.js";
+import { resolveDataDirectory } from "./runtime.js";
+import { DesktopScopePolicy, type CallerMetadata } from "./access-scope.js";
 import type { RunSnapshot, ServiceSnapshot, StartRunInput, StartServiceInput } from "./types.js";
 
 interface Event { type: string; seq: number; data: any }
@@ -14,7 +15,9 @@ interface ReadSessionInput { workspace: string; sessionId: string }
 export interface SelectModelInput extends ReadSessionInput { provider: string; model: string; reasoningEffort?: string | undefined }
 export interface DesktopManagerOptions {
   dataDirectory?: string;
+  /** Optional additional test/deployment ceiling, never a permission grant. */
   allowedRoots?: string[];
+  scopePolicy?: DesktopScopePolicy;
   pollIntervalMs?: number;
   client?: DesktopClient;
   openBrowser?: (url: string) => Promise<void>;
@@ -26,6 +29,7 @@ export class DesktopAttachManager {
   private readonly client: DesktopClient;
   private readonly store: DesktopStore;
   private readonly roots: string[];
+  private readonly scopePolicy: DesktopScopePolicy;
   private readonly pollIntervalMs: number;
   private readonly opener: (url: string) => Promise<void>;
   private readonly runs = new Map<string, DesktopRun>();
@@ -36,7 +40,8 @@ export class DesktopAttachManager {
   constructor(options: DesktopManagerOptions = {}) {
     this.client = options.client ?? new DesktopClient();
     this.store = new DesktopStore(resolve(options.dataDirectory ?? resolveDataDirectory()));
-    this.roots = options.allowedRoots ?? resolveAllowedRoots();
+    this.roots = options.allowedRoots ?? [];
+    this.scopePolicy = options.scopePolicy ?? new DesktopScopePolicy();
     this.pollIntervalMs = options.pollIntervalMs ?? 500;
     this.opener = options.openBrowser ?? (async url => {
       if (process.platform !== "darwin") throw new Error("Open Desktop manually and select the returned sessionId.");
@@ -46,6 +51,7 @@ export class DesktopAttachManager {
       });
     });
   }
+  async inspectAccessScope(input: StartRunInput | { workspace: string; accessScope?: { readRoots: string[]; writeRoots: string[] } }, meta: CallerMetadata) { return this.scopePolicy.inspect(input, meta); }
   connectionStatus() { return this.client.status(); }
   async connectDesktop(input: { connectionFile: string }) {
     return this.client.connectFile(input.connectionFile);
@@ -72,8 +78,9 @@ export class DesktopAttachManager {
     await this.close(); return { ...service, status: "stopped", stoppedAt: new Date().toISOString() };
   }
 
-  async start(input: StartRunInput): Promise<RunSnapshot> {
+  async start(input: StartRunInput, meta?: CallerMetadata): Promise<RunSnapshot> {
     if (!input.task.trim() || input.task.length > 100_000) throw new Error("task must contain 1–100,000 characters.");
+    const callerScope = await this.scopePolicy.authorize(input, meta);
     await this.load();
     const service = await this.startService({ workspace: input.workspace, openBrowser: false });
     const workspace = service.workspace;
@@ -82,11 +89,12 @@ export class DesktopAttachManager {
     if (sessionId) {
       for (const previous of this.runs.values()) {
         if (previous.workspace === workspace && previous.sessionId === sessionId && previous.status === "running") {
-          const observed = await this.get(previous.runId);
+          const observed = await this.get(previous.runId, meta);
           if (observed.status === "running") throw new Error("The previous run is still running or unresolved. Read that run or inspect Desktop; do not resend its prompt.");
         }
       }
-      await this.knownSession(workspace, sessionId);
+      const previous = await this.knownSession(workspace, sessionId, meta);
+      if (previous.callerScope!.scopeFingerprint !== callerScope.scopeFingerprint) throw new Error("Requested scope changed; an existing session cannot be reused under different directory bounds.");
     }
     else {
       const created = await this.client.rpc<{ workspace: { workspaceId: string } }>("workspace/create", { request: { path: workspace } });
@@ -101,7 +109,7 @@ export class DesktopAttachManager {
       if (summary.projections?.values.permissions?.currentValue !== "workspace-write") throw new Error(`Select workspace-write for session ${sessionId} in Desktop GUI before dispatch. Continue with this sessionId after selecting it; this plugin does not expand permissions.`);
       const run: DesktopRun = {
         runId, serviceId: service.serviceId, sessionId, sessionReused: reused, task: input.task.trim(), workspace,
-        webUrl: service.webUrl!, guiUrl: DESKTOP_GUI_URL, mode: "desktop-attach", requestId: randomUUID(), submissionState: "prepared",
+        callerScope, webUrl: service.webUrl!, guiUrl: DESKTOP_GUI_URL, mode: "desktop-attach", requestId: randomUUID(), submissionState: "prepared",
         status: "running", cancelRequested: false, startedAt: new Date().toISOString(), finishedAt: null, assistantText: "", lastEventSeq: this.cursor(summary), startEventSeq: this.cursor(summary), error: null,
       };
       this.runs.set(runId, run); this.leases.set(runId, release);
@@ -120,8 +128,9 @@ export class DesktopAttachManager {
     } catch (error) { this.leases.delete(runId); await release(); throw error; }
   }
 
-  async get(runId: string): Promise<RunSnapshot> {
+  async get(runId: string, meta?: CallerMetadata): Promise<RunSnapshot> {
     await this.load(); const run = this.requireRun(runId);
+    await this.scopePolicy.verifyStored(run.callerScope, meta);
     try {
       const service = await this.startService({ workspace: run.workspace }); run.serviceId = service.serviceId; run.webUrl = service.webUrl!;
       const summary = await this.summary(run.workspace, run.sessionId);
@@ -144,45 +153,48 @@ export class DesktopAttachManager {
     } catch (error) { run.error = error instanceof Error ? error.message : "Desktop state is unavailable. Reconnect explicitly; do not resend the task."; }
     return { ...run };
   }
-  async wait(runId: string, timeoutMs: number): Promise<RunSnapshot> {
+  async wait(runId: string, timeoutMs: number, meta?: CallerMetadata): Promise<RunSnapshot> {
     const deadline = Date.now() + Math.min(30_000, Math.max(0, timeoutMs));
-    let snapshot = await this.get(runId);
+    let snapshot = await this.get(runId, meta);
     while (snapshot.status === "running" && !snapshot.error && Date.now() < deadline) {
       await new Promise(resolve => setTimeout(resolve, Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now()))));
-      snapshot = await this.get(runId);
+      snapshot = await this.get(runId, meta);
     }
     return snapshot;
   }
-  async list(): Promise<RunSnapshot[]> { await this.load(); return Promise.all([...this.runs.keys()].map(id => this.get(id))); }
-  async cancel(runId: string): Promise<RunSnapshot> {
+  async list(meta?: CallerMetadata): Promise<RunSnapshot[]> { await this.load(); return Promise.all([...this.runs.values()].filter(run => this.scopePolicy.owns(run.callerScope, meta)).map(run => this.get(run.runId, meta))); }
+  async cancel(runId: string, meta?: CallerMetadata): Promise<RunSnapshot> {
     await this.load(); const run = this.requireRun(runId);
+    await this.scopePolicy.verifyStored(run.callerScope, meta);
     const workspace = await this.workspace(run.workspace);
-    await this.get(runId);
+    await this.get(runId, meta);
     if (run.status !== "running") return { ...run };
     if (!this.leases.has(runId)) this.leases.set(runId, await this.store.acquire(run.workspace, run.sessionId, runId));
     await this.summary(workspace, run.sessionId);
     run.cancelRequested = true; await this.store.save(run);
     await this.client.rpc("session/cancel", { request: { sessionId: run.sessionId } });
-    return this.get(runId);
+    return this.get(runId, meta);
   }
-  async readSession(input: ReadSessionInput) {
-    await this.load(); const workspace = await this.workspace(input.workspace); await this.knownSession(workspace, input.sessionId);
+  async readSession(input: ReadSessionInput, meta?: CallerMetadata) {
+    await this.load(); const workspace = await this.workspace(input.workspace); await this.knownSession(workspace, input.sessionId, meta);
     const summary = await this.summary(workspace, input.sessionId);
     return { sessionId: input.sessionId, running: summary.running, guiUrl: DESKTOP_GUI_URL, records: await this.history(input.sessionId, this.cursor(summary), -1) };
   }
-  async runEvents(runId: string, timeoutMs: number) {
-    await this.load(); const run = this.requireRun(runId); await this.summary(await this.workspace(run.workspace), run.sessionId);
+  async runEvents(runId: string, timeoutMs: number, meta?: CallerMetadata) {
+    await this.load(); const run = this.requireRun(runId);
+    await this.scopePolicy.verifyStored(run.callerScope, meta); await this.summary(await this.workspace(run.workspace), run.sessionId);
     const frames = await this.client.collect("session/follow", { request: { address: { kind: "session", sessionId: run.sessionId }, maxMessages: 50 } }, timeoutMs);
     return { runId, sessionId: run.sessionId, guiUrl: DESKTOP_GUI_URL, frames };
   }
-  async runControl(runId: string) {
-    await this.load(); const run = this.requireRun(runId); await this.summary(await this.workspace(run.workspace), run.sessionId);
+  async runControl(runId: string, meta?: CallerMetadata) {
+    await this.load(); const run = this.requireRun(runId);
+    await this.scopePolicy.verifyStored(run.callerScope, meta); await this.summary(await this.workspace(run.workspace), run.sessionId);
     const baseline = await this.client.first<any>("session/control", {});
     return { runId, sessionId: run.sessionId, guiUrl: DESKTOP_GUI_URL, projection: baseline?.value?.projections?.[run.sessionId] ?? null };
   }
   async modelCatalog() { return this.client.rpc("session/modelCatalog", {}); }
-  async selectModel(input: SelectModelInput) {
-    await this.load(); const workspace = await this.workspace(input.workspace); await this.knownSession(workspace, input.sessionId);
+  async selectModel(input: SelectModelInput, meta?: CallerMetadata) {
+    await this.load(); const workspace = await this.workspace(input.workspace); await this.knownSession(workspace, input.sessionId, meta);
     const release = await this.store.acquire(workspace, input.sessionId, randomUUID());
     try {
       if ((await this.summary(workspace, input.sessionId)).running) throw new Error("Desktop session is still running.");
@@ -201,9 +213,11 @@ export class DesktopAttachManager {
   }
   private requireRun(id: string): DesktopRun { const run = this.runs.get(id); if (!run) throw new Error("Unknown Desktop runId."); return run; }
   private async release(id: string) { const release = this.leases.get(id); this.leases.delete(id); if (release) await release(); }
-  private async knownSession(workspace: string, sessionId: string): Promise<void> {
-    const row = await this.summary(workspace, sessionId);
-    if (![...this.runs.values()].some(run => run.sessionId === sessionId && run.workspace === workspace) && row.blank !== true) throw new Error("Only a session previously delegated in this workspace or a selected blank session may be continued or inspected.");
+  private async knownSession(workspace: string, sessionId: string, meta: CallerMetadata): Promise<DesktopRun> {
+    const run = [...this.runs.values()].find(run => run.sessionId === sessionId && run.workspace === workspace);
+    await this.scopePolicy.verifyStored(run?.callerScope, meta);
+    await this.summary(workspace, sessionId);
+    return run!;
   }
   private async summary(workspace: string, sessionId: string): Promise<Summary> {
     const list = await this.client.rpc<{ items: Summary[] }>("session/list", { _request: {} });
@@ -233,9 +247,9 @@ export class DesktopAttachManager {
     if (!isAbsolute(input)) throw new Error("workspace must be an absolute path.");
     const path = await realpath(input);
     if (!(await stat(path)).isDirectory()) throw new Error("workspace must be a directory.");
-    if (!this.roots.length) throw new Error("Configure DSH_MCP_WORKSPACE_ROOTS before Desktop dispatch.");
+    if (!this.roots.length) return path;
     const roots = await Promise.all(this.roots.map(root => realpath(root)));
-    if (!roots.some(root => { const child = relative(root, path); return child === "" || (!child.startsWith("..") && !isAbsolute(child)); })) throw new Error("workspace is outside DSH_MCP_WORKSPACE_ROOTS.");
+    if (!roots.some(root => { const child = relative(root, path); return child === "" || (!child.startsWith("..") && !isAbsolute(child)); })) throw new Error("workspace is outside the additional deployment ceiling.");
     return path;
   }
 }

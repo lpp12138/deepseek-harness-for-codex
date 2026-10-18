@@ -27,14 +27,14 @@ async function rpc(method, params) {
 }
 try {
   const initialized = await rpc("initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "synthetic-bundle-check", version: "1" } });
-  assert.equal(initialized.result.serverInfo.version, "0.4.0-desktop.1");
+  assert.equal(initialized.result.serverInfo.version, "0.4.0-desktop.2");
   child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-  const tools = await rpc("tools/list", {}); assert.equal(tools.result.tools.length, 16);
+  const tools = await rpc("tools/list", {}); assert.equal(tools.result.tools.length, 17);
   const doctor = await rpc("tools/call", { name: "doctor", arguments: {} });
   assert.equal(doctor.result.structuredContent.mode, "desktop-attach");
   assert.equal(doctor.result.structuredContent.desktop.connected, false);
   assert.equal(doctor.result.structuredContent.managedFallback, false);
-  console.log("Self-contained bundle MCP initialize, 16 tools, and unauthenticated doctor: passed. No Host or model contacted.");
+  console.log("Self-contained bundle MCP initialize, 17 tools, and unauthenticated doctor: passed. No Host or model contacted.");
 } finally {
   child.kill("SIGTERM");
   await new Promise(resolve => { if (child.exitCode !== null) return resolve(); child.once("exit", resolve); setTimeout(() => { child.kill("SIGKILL"); resolve(); }, 2000).unref(); });

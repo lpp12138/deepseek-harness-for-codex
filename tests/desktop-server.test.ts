@@ -22,12 +22,27 @@ describe("Desktop MCP entry", () => {
       await Promise.all([server.connect(right), client.connect(left)]);
       const tools = await client.listTools();
       expect(tools.tools.map(tool => tool.name)).toEqual(expect.arrayContaining(["connect_desktop", "read_session", "get_run_events", "get_run_control", "list_models", "select_model"]));
+      expect(client.getServerCapabilities()?.experimental).toMatchObject({ "codex/sandbox-state": {}, "codex/sandbox-state-meta": {} });
+      const scope = { workspace, accessScope: { readRoots: [workspace], writeRoots: [workspace] } };
+      const metadata = { threadId: "synthetic-agent", sessionId: "synthetic-session", "codex/sandbox-state": { permissionProfile: { opaqueSyntheticPolicy: true }, sandboxCwd: "file:///synthetic" } };
+      const untrusted = await client.callTool({ name: "inspect_access_scope", arguments: { ...scope, _meta: metadata } });
+      expect(untrusted.isError).toBe(true);
+      const preflight = await client.callTool({ name: "inspect_access_scope", arguments: scope, _meta: metadata });
+      expect(preflight.structuredContent).toMatchObject({ callerContextReceived: true, canDispatch: false, globalRootsAreAuthority: false });
+      const blocked = await client.callTool({ name: "start_run", arguments: { ...scope, task: "must not dispatch" }, _meta: metadata });
+      expect(blocked.isError).toBe(true);
+      expect(JSON.stringify(blocked)).toContain("Desktop cannot apply");
+      expect(host.requests).toHaveLength(0);
       const doctor = await client.callTool({ name: "doctor", arguments: {} });
       expect(doctor.structuredContent).toMatchObject({ mode: "desktop-attach", ready: false, managedFallback: false, desktop: { connected: false, interactions: "none" } });
       expect(host.connections).toHaveLength(0);
       const connected = await client.callTool({ name: "connect_desktop", arguments: { connectionFile: file } });
       expect(connected.structuredContent).toMatchObject({ connected: true, interactions: "none", guiUrl: "dsh://open" });
       expect(JSON.stringify(connected)).not.toContain("synthetic-test-secret");
+      expect(host.requests).toHaveLength(0);
+      const connectedBlocked = await client.callTool({ name: "start_run", arguments: { ...scope, task: "must not dispatch while connected" }, _meta: metadata });
+      expect(connectedBlocked.isError).toBe(true);
+      expect(JSON.stringify(connectedBlocked)).toContain("Desktop cannot apply");
       expect(host.requests).toHaveLength(0);
     } finally { await client.close(); await server.close(); await manager.close(); await host.close(); await rm(root, { recursive: true, force: true }); }
   });

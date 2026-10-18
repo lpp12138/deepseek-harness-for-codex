@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DesktopAttachManager } from "../src/desktop-manager.js";
+import { syntheticScope } from "./fixtures/synthetic-scope.js";
 import { desktopHost } from "./fixtures/desktop-host.js";
 
 describe("Desktop attach lifecycle", () => {
@@ -14,7 +15,7 @@ describe("Desktop attach lifecycle", () => {
   const managers: DesktopAttachManager[] = [];
   const opener = vi.fn(async () => undefined);
   function make() {
-    const manager = new DesktopAttachManager({ dataDirectory: data, allowedRoots: [workspace], pollIntervalMs: 5, openBrowser: opener });
+    const manager = new DesktopAttachManager({ dataDirectory: data, allowedRoots: [workspace], scopePolicy: syntheticScope(workspace), pollIntervalMs: 5, openBrowser: opener });
     managers.push(manager); return manager;
   }
   beforeEach(async () => {
@@ -114,11 +115,22 @@ describe("Desktop attach lifecycle", () => {
     expect(host.sessions.get(run.sessionId)!.running).toBe(true);
     expect(host.requests.some(x => x.body.method === "session/cancel")).toBe(false);
   });
+  it("rejects another caller's read/cancel/continuation and changed per-call scope", async () => {
+    const m = make(); await m.connectDesktop({ connectionFile });
+    const run = await m.start({ workspace, task: "first" }); await m.wait(run.runId, 1000);
+    const foreign = { threadId: "another-agent", sessionId: "synthetic-codex-session", "codex/sandbox-state": { permissionProfile: { testFixture: true }, sandboxCwd: "file:///synthetic" } };
+    await expect(m.get(run.runId, foreign)).rejects.toThrow("another caller");
+    await expect(m.cancel(run.runId, foreign)).rejects.toThrow("another caller");
+    expect(await m.list(foreign)).toEqual([]);
+    await expect(m.readSession({ workspace, sessionId: run.sessionId }, foreign)).rejects.toThrow("another caller");
+    await expect(m.start({ workspace, sessionId: run.sessionId, task: "must not run", accessScope: { readRoots: [workspace], writeRoots: [] } })).rejects.toThrow("scope changed");
+    expect(host.requests.filter(x => x.body.method === "session/prompt")).toHaveLength(1);
+  });
   it("rechecks current workspace roots before canceling a recovered run", async () => {
     const m = make(); await m.connectDesktop({ connectionFile });
     const run = await m.start({ workspace, task: "keep running" }); await m.close();
     const other = join(root, "other"); await mkdir(other);
-    const narrowed = new DesktopAttachManager({ dataDirectory: data, allowedRoots: [other] }); managers.push(narrowed);
+    const narrowed = new DesktopAttachManager({ dataDirectory: data, allowedRoots: [other], scopePolicy: syntheticScope(workspace) }); managers.push(narrowed);
     await narrowed.connectDesktop({ connectionFile });
     await expect(narrowed.cancel(run.runId)).rejects.toThrow("outside");
     expect(host.requests.some(x => x.body.method === "session/cancel")).toBe(false);

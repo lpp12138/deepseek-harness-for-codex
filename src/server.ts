@@ -6,6 +6,7 @@ import { DesktopAttachManager } from "./desktop-manager.js";
 import { createRunManager } from "./manager.js";
 
 const runIdSchema = z.string().uuid().describe("Run identifier returned by start_run.");
+const accessScopeSchema = z.object({ readRoots: z.array(z.string().min(1)).max(128), writeRoots: z.array(z.string().min(1)).max(128) }).describe("Requested per-call directory bounds; never a permission grant. Codex supplies caller identity and opaque policy separately in transport _meta.");
 const serviceIdSchema = z.string().uuid().describe("Service identifier returned by start_service or start_run.");
 
 function result(value: object) {
@@ -27,10 +28,11 @@ function failure(error: unknown) {
 /** Creates the MCP tool surface over a local run manager. */
 export function createMcpServer(manager: RunManager | DesktopAttachManager = createRunManager()): McpServer {
   const server = new McpServer(
-    { name: "deepseek-harness-for-codex", version: "0.4.0-desktop.1" },
+    { name: "deepseek-harness-for-codex", version: "0.4.0-desktop.2" },
     {
+      capabilities: { experimental: { "codex/sandbox-state": {}, "codex/sandbox-state-meta": {} } },
       instructions:
-        "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Independently review changes. Only open a GUI on user request.",
+        "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Before dispatch call inspect_access_scope with this caller's requested read/write directories. Paths in arguments, MCP roots and cwd are not permission grants. Current Desktop lacks execution-side Codex policy support and dispatch is blocked; never bypass this with managed-web or another tool. Independently review changes. Only open a GUI on user request.",
     },
   );
 
@@ -45,7 +47,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async (input) => {
+    async (input, extra) => {
       try { return result(await manager.startService(input)); } catch (error) { return failure(error); }
     },
   );
@@ -58,7 +60,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       inputSchema: { serviceId: serviceIdSchema },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     },
-    async (input) => {
+    async (input, extra) => {
       try { return result(await manager.openService(input.serviceId)); } catch (error) { return failure(error); }
     },
   );
@@ -82,7 +84,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       inputSchema: { serviceId: serviceIdSchema },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async (input) => {
+    async (input, extra) => {
       try { return result(await manager.stopService(input.serviceId)); } catch (error) { return failure(error); }
     },
   );
@@ -99,8 +101,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       const runtime = inspectRuntime();
       if (manager instanceof DesktopAttachManager) {
         const connection = manager.connectionStatus();
-        const roots = runtime.allowedWorkspaceRoots as string[];
-        return result({ ...runtime, ready: Boolean(runtime.nodeSupported && connection.connected && roots.length), desktop: connection, missing: [...(connection.connected ? [] : ["user-approved connection file; call connect_desktop"]), ...(roots.length ? [] : ["DSH_MCP_WORKSPACE_ROOTS"])] });
+        return result({ ...runtime, ready: false, desktop: connection, missing: [...(connection.connected ? [] : ["user-approved connection file; call connect_desktop"]), "per-call trusted Codex metadata and native DSH execution-side policy bridge; call inspect_access_scope"] });
       }
       return result(runtime);
     },
@@ -114,14 +115,15 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       inputSchema: {
         task: z.string().min(1).max(100_000).describe("Complete implementation task, constraints, and acceptance checks for DeepSeek Harness."),
         workspace: z.string().min(1).describe("Absolute path of the repository DeepSeek Harness may inspect and modify."),
+        ...(manager instanceof DesktopAttachManager ? { accessScope: accessScopeSchema } : {}),
         sessionId: z.string().min(1).optional().describe("Completed Harness session to continue. Pass a sessionId returned by an earlier run in this workspace, or omit it to create a new session."),
         openBrowser: z.boolean().default(false).describe("Open the live Harness Web page. Keep false unless the user explicitly requested it."),
       },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     },
-    async (input) => {
+    async (input, extra) => {
       try {
-        return result(await manager.start(input));
+        return result(await (manager instanceof DesktopAttachManager ? manager.start(input, extra._meta) : manager.start(input)));
       } catch (error) {
         return failure(error);
       }
@@ -138,9 +140,9 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async (input) => {
+    async (input, extra) => {
       try {
-        return result(await manager.get(input.runId));
+        return result(await (manager instanceof DesktopAttachManager ? manager.get(input.runId, extra._meta) : manager.get(input.runId)));
       } catch (error) {
         return failure(error);
       }
@@ -158,9 +160,9 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async (input) => {
+    async (input, extra) => {
       try {
-        return result(await manager.wait(input.runId, input.timeoutMs));
+        return result(await (manager instanceof DesktopAttachManager ? manager.wait(input.runId, input.timeoutMs, extra._meta) : manager.wait(input.runId, input.timeoutMs)));
       } catch (error) {
         return failure(error);
       }
@@ -175,7 +177,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       inputSchema: {},
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
     },
-    async () => result({ runs: await manager.list() }),
+    async (_, extra) => { try { return result({ runs: await (manager instanceof DesktopAttachManager ? manager.list(extra._meta) : manager.list()) }); } catch (error) { return failure(error); } },
   );
 
   server.registerTool(
@@ -186,9 +188,9 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       inputSchema: { runId: runIdSchema },
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false },
     },
-    async (input) => {
+    async (input, extra) => {
       try {
-        return result(await manager.cancel(input.runId));
+        return result(await (manager instanceof DesktopAttachManager ? manager.cancel(input.runId, extra._meta) : manager.cancel(input.runId)));
       } catch (error) {
         return failure(error);
       }
@@ -196,31 +198,37 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
   );
 
   if (manager instanceof DesktopAttachManager) {
+    server.registerTool("inspect_access_scope", {
+      title: "Check this caller’s requested directory scope",
+      description: "Local preflight only: validate per-call read/write directory proposals and host-supplied Codex sandbox metadata. No Desktop connection or task. Current Desktop cannot enforce the opaque caller policy, so canDispatch is false. Never treat model declarations, MCP roots, cwd or global env roots as authority.",
+      inputSchema: { workspace: z.string().min(1), accessScope: accessScopeSchema },
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    }, async (input, extra) => { try { return result(await manager.inspectAccessScope(input, extra._meta)); } catch (error) { return failure(error); } });
     server.registerTool("connect_desktop", {
       title: "Connect to an authorized existing Desktop Host",
       description: "Read one connection file explicitly provided and approved by the human user. Exchange its loopback /connect URL for a memory-only passive API Peer. Never search IPC, logs, environment, credentials, sessions, or databases for a token. This does not submit a model task.",
       inputSchema: { connectionFile: z.string().min(1).describe("Absolute path explicitly supplied by the user; contains one authorized /connect?token=... URL. Do not put the URL or token in chat or tool arguments.") },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-    }, async input => { try { return result(await manager.connectDesktop(input)); } catch (error) { return failure(error); } });
+    }, async (input, extra) => { try { return result(await manager.connectDesktop(input)); } catch (error) { return failure(error); } });
     const sessionInput = { workspace: z.string().min(1), sessionId: z.string().min(1) };
     server.registerTool("read_session", {
       title: "Read scoped Desktop history and status",
       description: "Read status and cold-safe paginated history for a delegated session in its authorized workspace. Does not send a prompt, resume a cold agent, or change a model.",
       inputSchema: sessionInput,
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    }, async input => { try { return result(await manager.readSession(input)); } catch (error) { return failure(error); } });
+    }, async (input, extra) => { try { return result(await manager.readSession(input, extra._meta)); } catch (error) { return failure(error); } });
     server.registerTool("get_run_events", {
       title: "Follow this Desktop run's live session",
       description: "Read a bounded snapshot and live frames from this run's /api/remote.mux session/follow stream. The Host may materialize its delegated session; no prompt is submitted and no approval is answered.",
       inputSchema: { runId: runIdSchema, timeoutMs: z.number().int().min(0).max(30_000).default(0) },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    }, async input => { try { return result(await manager.runEvents(input.runId, input.timeoutMs)); } catch (error) { return failure(error); } });
+    }, async (input, extra) => { try { return result(await manager.runEvents(input.runId, input.timeoutMs, extra._meta)); } catch (error) { return failure(error); } });
     server.registerTool("get_run_control", {
       title: "Read this run's live Desktop projections",
       description: "Read the control baseline over the authenticated mux and return only this delegated session's projection.",
       inputSchema: { runId: runIdSchema },
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    }, async input => { try { return result(await manager.runControl(input.runId)); } catch (error) { return failure(error); } });
+    }, async (input, extra) => { try { return result(await manager.runControl(input.runId, extra._meta)); } catch (error) { return failure(error); } });
     server.registerTool("list_models", {
       title: "List models already available in Desktop",
       description: "Read Desktop's configured routable model catalog; providers may refresh their catalog. Does not copy credentials or submit a generation.",
@@ -232,7 +240,7 @@ export function createMcpServer(manager: RunManager | DesktopAttachManager = cre
       description: "Only on user request: select a model for an idle delegated session. Desktop also saves this selection as its new-session default. Never call this merely to attach or inspect a run.",
       inputSchema: { ...sessionInput, provider: z.string().min(1), model: z.string().min(1), reasoningEffort: z.string().optional() },
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
-    }, async input => { try { return result({ value: await manager.selectModel(input) }); } catch (error) { return failure(error); } });
+    }, async (input, extra) => { try { return result({ value: await manager.selectModel(input, extra._meta) }); } catch (error) { return failure(error); } });
   }
   return server;
 }

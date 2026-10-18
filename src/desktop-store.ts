@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, readdir, rename, unlink } from "node:fs/promises";
 import { join } from "node:path";
+import type { CallerScopeBinding } from "./access-scope.js";
 import type { RunSnapshot } from "./types.js";
 
 export interface DesktopRun extends RunSnapshot {
@@ -8,6 +9,7 @@ export interface DesktopRun extends RunSnapshot {
   guiUrl: string;
   requestId: string;
   submissionState: "prepared" | "accepted" | "uncertain";
+  callerScope?: CallerScopeBinding;
   startEventSeq: number;
   endEventSeq?: number;
 }

@@ -70,7 +70,7 @@ export function inspectRuntime(env: NodeJS.ProcessEnv = process.env): Record<str
   const mode = resolveMode(env);
   if (mode === "desktop-attach") {
     const supported = Number.parseInt(process.versions.node.split(".")[0] ?? "0", 10) >= 22;
-    return { ready: false, mode, nodeVersion: process.versions.node, nodeSupported: supported, platform: process.platform, architecture: process.arch, dataDirectory: resolveDataDirectory(env), allowedWorkspaceRoots: resolveAllowedRoots(env), surface: "desktop", authentication: "explicit connect_desktop; memory-only API Cookie", interactions: "none", permissionMode: "workspace-write", managedFallback: false };
+    return { ready: false, mode, nodeVersion: process.versions.node, nodeSupported: supported, platform: process.platform, architecture: process.arch, dataDirectory: resolveDataDirectory(env), directoryScope: "per-call proposal plus trusted Codex transport metadata", globalRootsAreAuthority: false, desktopPolicyEnforcement: "unavailable", surface: "desktop", authentication: "explicit connect_desktop; memory-only API Cookie", interactions: "none", permissionMode: "workspace-write", managedFallback: false };
   }
   const command = env.DSH_MCP_NPX_COMMAND?.trim() || (process.platform === "win32" ? "npx.cmd" : "npx");
   const probe = spawnSync(command, ["--version"], { encoding: "utf8", shell: false, timeout: 5_000 });

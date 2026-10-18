@@ -4287,7 +4287,7 @@ const ZodObject$1 = /*@__PURE__*/ $constructor("ZodObject", (inst, def) => {
 		}
 	});
 });
-function object$1(shape, params) {
+function object$2(shape, params) {
 	const def = {
 		type: "object",
 		shape: shape ?? {},
@@ -4635,12 +4635,12 @@ const TaskCreationParamsSchema = looseObject({
 	*/
 	pollInterval: number().optional()
 });
-const TaskMetadataSchema = object$1({ ttl: number().optional() });
+const TaskMetadataSchema = object$2({ ttl: number().optional() });
 /**
 * Metadata for associating messages with a task.
 * Include this in the `_meta` field under the key `io.modelcontextprotocol/related-task`.
 */
-const RelatedTaskMetadataSchema = object$1({ taskId: string() });
+const RelatedTaskMetadataSchema = object$2({ taskId: string() });
 const RequestMetaSchema = looseObject({
 	/**
 	* If specified, the caller is requesting out-of-band progress notifications for this request (as represented by notifications/progress). The value of this parameter is an opaque token that will be attached to any subsequent notifications. The receiver is not obligated to provide these notifications.
@@ -4654,7 +4654,7 @@ const RequestMetaSchema = looseObject({
 /**
 * Common params for any request.
 */
-const BaseRequestParamsSchema = object$1({ 
+const BaseRequestParamsSchema = object$2({ 
 /**
 * See [General fields: `_meta`](/specification/draft/basic/index#meta) for notes on `_meta` usage.
 */
@@ -4679,17 +4679,17 @@ task: TaskMetadataSchema.optional() });
 * @returns True if the value is a valid TaskAugmentedRequestParams, false otherwise.
 */
 const isTaskAugmentedRequestParams = (value) => TaskAugmentedRequestParamsSchema.safeParse(value).success;
-const RequestSchema = object$1({
+const RequestSchema = object$2({
 	method: string(),
 	params: BaseRequestParamsSchema.loose().optional()
 });
-const NotificationsParamsSchema = object$1({ 
+const NotificationsParamsSchema = object$2({ 
 /**
 * See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
 * for notes on _meta usage.
 */
 _meta: RequestMetaSchema.optional() });
-const NotificationSchema = object$1({
+const NotificationSchema = object$2({
 	method: string(),
 	params: NotificationsParamsSchema.loose().optional()
 });
@@ -4706,7 +4706,7 @@ const RequestIdSchema = union([string(), number().int()]);
 /**
 * A request that expects a response.
 */
-const JSONRPCRequestSchema = object$1({
+const JSONRPCRequestSchema = object$2({
 	jsonrpc: literal("2.0"),
 	id: RequestIdSchema,
 	...RequestSchema.shape
@@ -4715,7 +4715,7 @@ const isJSONRPCRequest = (value) => JSONRPCRequestSchema.safeParse(value).succes
 /**
 * A notification which does not expect a response.
 */
-const JSONRPCNotificationSchema = object$1({
+const JSONRPCNotificationSchema = object$2({
 	jsonrpc: literal("2.0"),
 	...NotificationSchema.shape
 }).strict();
@@ -4723,7 +4723,7 @@ const isJSONRPCNotification = (value) => JSONRPCNotificationSchema.safeParse(val
 /**
 * A successful (non-error) response to a request.
 */
-const JSONRPCResultResponseSchema = object$1({
+const JSONRPCResultResponseSchema = object$2({
 	jsonrpc: literal("2.0"),
 	id: RequestIdSchema,
 	result: ResultSchema
@@ -4752,10 +4752,10 @@ var ErrorCode;
 /**
 * A response to a request that indicates an error occurred.
 */
-const JSONRPCErrorResponseSchema = object$1({
+const JSONRPCErrorResponseSchema = object$2({
 	jsonrpc: literal("2.0"),
 	id: RequestIdSchema.optional(),
-	error: object$1({
+	error: object$2({
 		/**
 		* The error type that occurred.
 		*/
@@ -4816,7 +4816,7 @@ const CancelledNotificationSchema = NotificationSchema.extend({
 /**
 * Icon schema for use in tools, prompts, resources, and implementations.
 */
-const IconSchema = object$1({
+const IconSchema = object$2({
 	/**
 	* URL or data URI for the icon.
 	*/
@@ -4845,7 +4845,7 @@ const IconSchema = object$1({
 * Base schema to add `icons` property.
 *
 */
-const IconsSchema = object$1({ 
+const IconsSchema = object$2({ 
 /**
 * Optional set of sized icons that the client can display in a user interface.
 *
@@ -4861,7 +4861,7 @@ icons: array(IconSchema).optional() });
 /**
 * Base metadata interface for common properties across resources, tools, prompts, and implementations.
 */
-const BaseMetadataSchema = object$1({
+const BaseMetadataSchema = object$2({
 	/** Intended for programmatic or logical use, but used as a display name in past specs or fallback */
 	name: string(),
 	/**
@@ -4894,13 +4894,13 @@ const ImplementationSchema = BaseMetadataSchema.extend({
 	*/
 	description: string().optional()
 });
-const FormElicitationCapabilitySchema = intersection(object$1({ applyDefaults: boolean().optional() }), record(string(), unknown()));
+const FormElicitationCapabilitySchema = intersection(object$2({ applyDefaults: boolean().optional() }), record(string(), unknown()));
 const ElicitationCapabilitySchema = preprocess((value) => {
 	if (value && typeof value === "object" && !Array.isArray(value)) {
 		if (Object.keys(value).length === 0) return { form: {} };
 	}
 	return value;
-}, intersection(object$1({
+}, intersection(object$2({
 	form: FormElicitationCapabilitySchema.optional(),
 	url: AssertObjectSchema.optional()
 }), record(string(), unknown()).optional()));
@@ -4954,7 +4954,7 @@ tools: looseObject({ call: AssertObjectSchema.optional() }).optional() }).option
 /**
 * Capabilities a client may support. Known capabilities are defined here, in this schema, but this is not a closed set: any client can define its own, additional capabilities.
 */
-const ClientCapabilitiesSchema = object$1({
+const ClientCapabilitiesSchema = object$2({
 	/**
 	* Experimental, non-standard capabilities that the client supports.
 	*/
@@ -4962,7 +4962,7 @@ const ClientCapabilitiesSchema = object$1({
 	/**
 	* Present if the client supports sampling from an LLM.
 	*/
-	sampling: object$1({
+	sampling: object$2({
 		/**
 		* Present if the client supports context inclusion via includeContext parameter.
 		* If not declared, servers SHOULD only use `includeContext: "none"` (or omit it).
@@ -4980,7 +4980,7 @@ const ClientCapabilitiesSchema = object$1({
 	/**
 	* Present if the client supports listing roots.
 	*/
-	roots: object$1({ 
+	roots: object$2({ 
 	/**
 	* Whether the client supports issuing notifications for changes to the roots list.
 	*/
@@ -5012,7 +5012,7 @@ const InitializeRequestSchema = RequestSchema.extend({
 /**
 * Capabilities that a server may support. Known capabilities are defined here, in this schema, but this is not a closed set: any server can define its own, additional capabilities.
 */
-const ServerCapabilitiesSchema = object$1({
+const ServerCapabilitiesSchema = object$2({
 	/**
 	* Experimental, non-standard capabilities that the server supports.
 	*/
@@ -5028,7 +5028,7 @@ const ServerCapabilitiesSchema = object$1({
 	/**
 	* Present if the server offers any prompt templates.
 	*/
-	prompts: object$1({ 
+	prompts: object$2({ 
 	/**
 	* Whether this server supports issuing notifications for changes to the prompt list.
 	*/
@@ -5036,7 +5036,7 @@ listChanged: boolean().optional() }).optional(),
 	/**
 	* Present if the server offers any resources to read.
 	*/
-	resources: object$1({
+	resources: object$2({
 		/**
 		* Whether this server supports clients subscribing to resource updates.
 		*/
@@ -5049,7 +5049,7 @@ listChanged: boolean().optional() }).optional(),
 	/**
 	* Present if the server offers any tools to call.
 	*/
-	tools: object$1({ 
+	tools: object$2({ 
 	/**
 	* Whether this server supports issuing notifications for changes to the tool list.
 	*/
@@ -5094,7 +5094,7 @@ const PingRequestSchema = RequestSchema.extend({
 	method: literal("ping"),
 	params: BaseRequestParamsSchema.optional()
 });
-const ProgressSchema = object$1({
+const ProgressSchema = object$2({
 	/**
 	* The progress thus far. This should increase every time progress is made, even if the total is unknown.
 	*/
@@ -5108,7 +5108,7 @@ const ProgressSchema = object$1({
 	*/
 	message: optional(string())
 });
-const ProgressNotificationParamsSchema = object$1({
+const ProgressNotificationParamsSchema = object$2({
 	...NotificationsParamsSchema.shape,
 	...ProgressSchema.shape,
 	/**
@@ -5151,7 +5151,7 @@ const TaskStatusSchema = _enum([
 /**
 * A pollable state object associated with a request.
 */
-const TaskSchema = object$1({
+const TaskSchema = object$2({
 	taskId: string(),
 	status: TaskStatusSchema,
 	/**
@@ -5235,7 +5235,7 @@ const CancelTaskResultSchema = ResultSchema.merge(TaskSchema);
 /**
 * The contents of a specific resource or sub-resource.
 */
-const ResourceContentsSchema = object$1({
+const ResourceContentsSchema = object$2({
 	/**
 	* The URI of this resource.
 	*/
@@ -5280,7 +5280,7 @@ const RoleSchema = _enum(["user", "assistant"]);
 /**
 * Optional annotations providing clients additional context about a resource.
 */
-const AnnotationsSchema = object$1({
+const AnnotationsSchema = object$2({
 	/**
 	* Intended audience(s) for the resource.
 	*/
@@ -5297,7 +5297,7 @@ const AnnotationsSchema = object$1({
 /**
 * A known resource that the server is capable of reading.
 */
-const ResourceSchema = object$1({
+const ResourceSchema = object$2({
 	...BaseMetadataSchema.shape,
 	...IconsSchema.shape,
 	/**
@@ -5333,7 +5333,7 @@ const ResourceSchema = object$1({
 /**
 * A template description for resources available on the server.
 */
-const ResourceTemplateSchema = object$1({
+const ResourceTemplateSchema = object$2({
 	...BaseMetadataSchema.shape,
 	...IconsSchema.shape,
 	/**
@@ -5439,7 +5439,7 @@ const ResourceUpdatedNotificationSchema = NotificationSchema.extend({
 /**
 * Describes an argument that a prompt can accept.
 */
-const PromptArgumentSchema = object$1({
+const PromptArgumentSchema = object$2({
 	/**
 	* The name of the argument.
 	*/
@@ -5456,7 +5456,7 @@ const PromptArgumentSchema = object$1({
 /**
 * A prompt or prompt template that the server offers.
 */
-const PromptSchema = object$1({
+const PromptSchema = object$2({
 	...BaseMetadataSchema.shape,
 	...IconsSchema.shape,
 	/**
@@ -5504,7 +5504,7 @@ const GetPromptRequestSchema = RequestSchema.extend({
 /**
 * Text provided to or from an LLM.
 */
-const TextContentSchema = object$1({
+const TextContentSchema = object$2({
 	type: literal("text"),
 	/**
 	* The text content of the message.
@@ -5523,7 +5523,7 @@ const TextContentSchema = object$1({
 /**
 * An image provided to or from an LLM.
 */
-const ImageContentSchema = object$1({
+const ImageContentSchema = object$2({
 	type: literal("image"),
 	/**
 	* The base64-encoded image data.
@@ -5546,7 +5546,7 @@ const ImageContentSchema = object$1({
 /**
 * An Audio provided to or from an LLM.
 */
-const AudioContentSchema = object$1({
+const AudioContentSchema = object$2({
 	type: literal("audio"),
 	/**
 	* The base64-encoded audio data.
@@ -5570,7 +5570,7 @@ const AudioContentSchema = object$1({
 * A tool call request from an assistant (LLM).
 * Represents the assistant's request to use a tool.
 */
-const ToolUseContentSchema = object$1({
+const ToolUseContentSchema = object$2({
 	type: literal("tool_use"),
 	/**
 	* The name of the tool to invoke.
@@ -5596,7 +5596,7 @@ const ToolUseContentSchema = object$1({
 /**
 * The contents of a resource, embedded into a prompt or tool call result.
 */
-const EmbeddedResourceSchema = object$1({
+const EmbeddedResourceSchema = object$2({
 	type: literal("resource"),
 	resource: union([TextResourceContentsSchema, BlobResourceContentsSchema]),
 	/**
@@ -5628,7 +5628,7 @@ const ContentBlockSchema = union([
 /**
 * Describes a message returned as part of a prompt.
 */
-const PromptMessageSchema = object$1({
+const PromptMessageSchema = object$2({
 	role: RoleSchema,
 	content: ContentBlockSchema
 });
@@ -5659,7 +5659,7 @@ const PromptListChangedNotificationSchema = NotificationSchema.extend({
 * Clients should never make tool use decisions based on ToolAnnotations
 * received from untrusted servers.
 */
-const ToolAnnotationsSchema = object$1({
+const ToolAnnotationsSchema = object$2({
 	/**
 	* A human-readable title for the tool.
 	*/
@@ -5701,7 +5701,7 @@ const ToolAnnotationsSchema = object$1({
 /**
 * Execution-related properties for a tool.
 */
-const ToolExecutionSchema = object$1({ 
+const ToolExecutionSchema = object$2({ 
 /**
 * Indicates the tool's preference for task-augmented execution.
 * - "required": Clients MUST invoke the tool as a task
@@ -5718,7 +5718,7 @@ taskSupport: _enum([
 /**
 * Definition for a tool the client can call.
 */
-const ToolSchema = object$1({
+const ToolSchema = object$2({
 	...BaseMetadataSchema.shape,
 	...IconsSchema.shape,
 	/**
@@ -5729,7 +5729,7 @@ const ToolSchema = object$1({
 	* A JSON Schema 2020-12 object defining the expected parameters for the tool.
 	* Must have type: 'object' at the root level per MCP spec.
 	*/
-	inputSchema: object$1({
+	inputSchema: object$2({
 		type: literal("object"),
 		properties: record(string(), AssertObjectSchema).optional(),
 		required: array(string()).optional()
@@ -5739,7 +5739,7 @@ const ToolSchema = object$1({
 	* returned in the structuredContent field of a CallToolResult.
 	* Must have type: 'object' at the root level per MCP spec.
 	*/
-	outputSchema: object$1({
+	outputSchema: object$2({
 		type: literal("object"),
 		properties: record(string(), AssertObjectSchema).optional(),
 		required: array(string()).optional()
@@ -5834,7 +5834,7 @@ const ToolListChangedNotificationSchema = NotificationSchema.extend({
 * Base schema for list changed subscription options (without callback).
 * Used internally for Zod validation of autoRefresh and debounceMs.
 */
-const ListChangedOptionsBaseSchema = object$1({
+const ListChangedOptionsBaseSchema = object$2({
 	/**
 	* If true, the list will be refreshed automatically when a list changed notification is received.
 	* The callback will be called with the updated list.
@@ -5909,7 +5909,7 @@ const LoggingMessageNotificationSchema = NotificationSchema.extend({
 /**
 * Hints to use for model selection.
 */
-const ModelHintSchema = object$1({ 
+const ModelHintSchema = object$2({ 
 /**
 * A hint for a model name.
 */
@@ -5917,7 +5917,7 @@ name: string().optional() });
 /**
 * The server's preferences for model selection, requested of the client during sampling.
 */
-const ModelPreferencesSchema = object$1({
+const ModelPreferencesSchema = object$2({
 	/**
 	* Optional hints to use for model selection.
 	*/
@@ -5938,7 +5938,7 @@ const ModelPreferencesSchema = object$1({
 /**
 * Controls tool usage behavior in sampling requests.
 */
-const ToolChoiceSchema = object$1({ 
+const ToolChoiceSchema = object$2({ 
 /**
 * Controls when tools are used:
 * - "auto": Model decides whether to use tools (default)
@@ -5954,11 +5954,11 @@ mode: _enum([
 * The result of a tool execution, provided by the user (server).
 * Represents the outcome of invoking a tool requested via ToolUseContent.
 */
-const ToolResultContentSchema = object$1({
+const ToolResultContentSchema = object$2({
 	type: literal("tool_result"),
 	toolUseId: string().describe("The unique identifier for the corresponding tool call."),
 	content: array(ContentBlockSchema).default([]),
-	structuredContent: object$1({}).loose().optional(),
+	structuredContent: object$2({}).loose().optional(),
 	isError: boolean().optional(),
 	/**
 	* See [MCP specification](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/47339c03c143bb4ec01a26e721a1b8fe66634ebe/docs/specification/draft/basic/index.mdx#general-fields)
@@ -5989,7 +5989,7 @@ const SamplingMessageContentBlockSchema = discriminatedUnion("type", [
 /**
 * Describes a message issued to or received from an LLM API.
 */
-const SamplingMessageSchema = object$1({
+const SamplingMessageSchema = object$2({
 	role: RoleSchema,
 	content: union([SamplingMessageContentBlockSchema, array(SamplingMessageContentBlockSchema)]),
 	/**
@@ -6120,7 +6120,7 @@ const CreateMessageResultWithToolsSchema = ResultSchema.extend({
 /**
 * Primitive schema definition for boolean fields.
 */
-const BooleanSchemaSchema = object$1({
+const BooleanSchemaSchema = object$2({
 	type: literal("boolean"),
 	title: string().optional(),
 	description: string().optional(),
@@ -6129,7 +6129,7 @@ const BooleanSchemaSchema = object$1({
 /**
 * Primitive schema definition for string fields.
 */
-const StringSchemaSchema = object$1({
+const StringSchemaSchema = object$2({
 	type: literal("string"),
 	title: string().optional(),
 	description: string().optional(),
@@ -6146,7 +6146,7 @@ const StringSchemaSchema = object$1({
 /**
 * Primitive schema definition for number fields.
 */
-const NumberSchemaSchema = object$1({
+const NumberSchemaSchema = object$2({
 	type: _enum(["number", "integer"]),
 	title: string().optional(),
 	description: string().optional(),
@@ -6157,7 +6157,7 @@ const NumberSchemaSchema = object$1({
 /**
 * Schema for single-selection enumeration without display titles for options.
 */
-const UntitledSingleSelectEnumSchemaSchema = object$1({
+const UntitledSingleSelectEnumSchemaSchema = object$2({
 	type: literal("string"),
 	title: string().optional(),
 	description: string().optional(),
@@ -6167,11 +6167,11 @@ const UntitledSingleSelectEnumSchemaSchema = object$1({
 /**
 * Schema for single-selection enumeration with display titles for each option.
 */
-const TitledSingleSelectEnumSchemaSchema = object$1({
+const TitledSingleSelectEnumSchemaSchema = object$2({
 	type: literal("string"),
 	title: string().optional(),
 	description: string().optional(),
-	oneOf: array(object$1({
+	oneOf: array(object$2({
 		const: string(),
 		title: string()
 	})),
@@ -6181,7 +6181,7 @@ const TitledSingleSelectEnumSchemaSchema = object$1({
 * Use TitledSingleSelectEnumSchema instead.
 * This interface will be removed in a future version.
 */
-const LegacyTitledEnumSchemaSchema = object$1({
+const LegacyTitledEnumSchemaSchema = object$2({
 	type: literal("string"),
 	title: string().optional(),
 	description: string().optional(),
@@ -6193,13 +6193,13 @@ const SingleSelectEnumSchemaSchema = union([UntitledSingleSelectEnumSchemaSchema
 /**
 * Schema for multiple-selection enumeration without display titles for options.
 */
-const UntitledMultiSelectEnumSchemaSchema = object$1({
+const UntitledMultiSelectEnumSchemaSchema = object$2({
 	type: literal("array"),
 	title: string().optional(),
 	description: string().optional(),
 	minItems: number().optional(),
 	maxItems: number().optional(),
-	items: object$1({
+	items: object$2({
 		type: literal("string"),
 		enum: array(string())
 	}),
@@ -6208,13 +6208,13 @@ const UntitledMultiSelectEnumSchemaSchema = object$1({
 /**
 * Schema for multiple-selection enumeration with display titles for each option.
 */
-const TitledMultiSelectEnumSchemaSchema = object$1({
+const TitledMultiSelectEnumSchemaSchema = object$2({
 	type: literal("array"),
 	title: string().optional(),
 	description: string().optional(),
 	minItems: number().optional(),
 	maxItems: number().optional(),
-	items: object$1({ anyOf: array(object$1({
+	items: object$2({ anyOf: array(object$2({
 		const: string(),
 		title: string()
 	})) }),
@@ -6259,7 +6259,7 @@ const ElicitRequestFormParamsSchema = TaskAugmentedRequestParamsSchema.extend({
 	* A restricted subset of JSON Schema.
 	* Only top-level properties are allowed, without nesting.
 	*/
-	requestedSchema: object$1({
+	requestedSchema: object$2({
 		type: literal("object"),
 		properties: record(string(), PrimitiveSchemaDefinitionSchema),
 		required: array(string()).optional()
@@ -6350,7 +6350,7 @@ const ElicitResultSchema = ResultSchema.extend({
 /**
 * A reference to a resource or resource template definition.
 */
-const ResourceTemplateReferenceSchema = object$1({
+const ResourceTemplateReferenceSchema = object$2({
 	type: literal("ref/resource"),
 	/**
 	* The URI or URI template of the resource.
@@ -6360,7 +6360,7 @@ const ResourceTemplateReferenceSchema = object$1({
 /**
 * Identifies a prompt.
 */
-const PromptReferenceSchema = object$1({
+const PromptReferenceSchema = object$2({
 	type: literal("ref/prompt"),
 	/**
 	* The name of the prompt or prompt template
@@ -6375,7 +6375,7 @@ const CompleteRequestParamsSchema = BaseRequestParamsSchema.extend({
 	/**
 	* The argument's information
 	*/
-	argument: object$1({
+	argument: object$2({
 		/**
 		* The name of the argument
 		*/
@@ -6385,7 +6385,7 @@ const CompleteRequestParamsSchema = BaseRequestParamsSchema.extend({
 		*/
 		value: string()
 	}),
-	context: object$1({ 
+	context: object$2({ 
 	/**
 	* Previously-resolved variables in a URI template or prompt.
 	*/
@@ -6424,7 +6424,7 @@ const CompleteResultSchema = ResultSchema.extend({ completion: looseObject({
 /**
 * Represents a root directory or file that the server can operate on.
 */
-const RootSchema = object$1({
+const RootSchema = object$2({
 	/**
 	* The URI identifying the root. This *must* start with file:// for now.
 	*/
@@ -10723,7 +10723,9 @@ function inspectRuntime(env = process.env) {
 			platform: process.platform,
 			architecture: process.arch,
 			dataDirectory: resolveDataDirectory(env),
-			allowedWorkspaceRoots: resolveAllowedRoots(env),
+			directoryScope: "per-call proposal plus trusted Codex transport metadata",
+			globalRootsAreAuthority: false,
+			desktopPolicyEnforcement: "unavailable",
 			surface: "desktop",
 			authentication: "explicit connect_desktop; memory-only API Cookie",
 			interactions: "none",
@@ -10757,6 +10759,98 @@ function inspectRuntime(env = process.env) {
 }
 
 //#endregion
+//#region src/access-scope.ts
+const object$1 = (value) => Boolean(value && typeof value === "object" && !Array.isArray(value));
+function stable(value) {
+	if (Array.isArray(value)) return "[" + value.map(stable).join(",") + "]";
+	if (object$1(value)) return "{" + Object.keys(value).sort().map((key) => JSON.stringify(key) + ":" + stable(value[key])).join(",") + "}";
+	return JSON.stringify(value) ?? "null";
+}
+const fingerprint = (value) => createHash("sha256").update(stable(value)).digest("hex");
+/** Transport _meta only. Model arguments and roots/list never establish authority. */
+function callerIdentity(meta) {
+	const state = meta?.["codex/sandbox-state"] ?? meta?.["codex/sandbox-state-meta"];
+	if (meta?.["codex/sandbox-state"] !== void 0 && meta["codex/sandbox-state-meta"] !== void 0 && stable(meta["codex/sandbox-state"]) !== stable(meta["codex/sandbox-state-meta"])) throw new Error("Codex supplied conflicting sandbox metadata aliases.");
+	if (!meta || typeof meta.threadId !== "string" || !meta.threadId || typeof meta.sessionId !== "string" || !meta.sessionId || !object$1(state) || !object$1(state.permissionProfile)) throw new Error("Missing trusted caller context: Codex must supply threadId, sessionId and opaque sandbox policy in tool-call _meta. Model-declared paths and MCP roots are not permission grants.");
+	return {
+		callerFingerprint: fingerprint([meta.threadId, meta.sessionId]),
+		policyFingerprint: fingerprint(state)
+	};
+}
+async function directory(value) {
+	if (typeof value !== "string" || !isAbsolute(value)) throw new Error("Scope paths and workspace must be absolute directories.");
+	const canonical = await realpath(value);
+	if (!(await stat(canonical)).isDirectory()) throw new Error("Scope paths and workspace must be directories.");
+	return canonical;
+}
+function contains(root, path) {
+	const child = relative(root, path);
+	return child === "" || child !== ".." && !child.startsWith("../") && !isAbsolute(child);
+}
+async function normalizeScope(input) {
+	const scope = input.accessScope;
+	if (!scope || !Array.isArray(scope.readRoots) || !Array.isArray(scope.writeRoots) || scope.readRoots.length + scope.writeRoots.length > 128) throw new Error("Provide per-call accessScope.readRoots and accessScope.writeRoots (at most 128 directories). These are requested bounds, not authorization.");
+	const [workspace, reads, writes] = await Promise.all([
+		directory(input.workspace),
+		Promise.all(scope.readRoots.map(directory)),
+		Promise.all(scope.writeRoots.map(directory))
+	]);
+	const readRoots = [...new Set(reads)].sort();
+	const writeRoots = [...new Set(writes)].sort();
+	if (![...readRoots, ...writeRoots].some((root) => contains(root, workspace))) throw new Error("workspace is outside the requested directory scope.");
+	return {
+		workspace,
+		readRoots,
+		writeRoots
+	};
+}
+/** No implementation claims enforcement by an already-running Desktop Host. */
+var DesktopScopePolicy = class {
+	async prepare(input, meta) {
+		const identity = callerIdentity(meta);
+		const canonical = await normalizeScope(input);
+		return {
+			...identity,
+			scopeFingerprint: fingerprint(canonical),
+			canonical,
+			requested: {
+				workspace: input.workspace,
+				accessScope: {
+					readRoots: [...input.accessScope.readRoots],
+					writeRoots: [...input.accessScope.writeRoots]
+				}
+			}
+		};
+	}
+	async inspect(input, meta) {
+		return {
+			callerContextReceived: true,
+			canDispatch: false,
+			desktopPolicyEnforcement: "unavailable",
+			globalRootsAreAuthority: false,
+			requestedScope: (await this.prepare(input, meta)).canonical,
+			missing: "DSH execution-side support for the current caller's opaque Codex sandbox policy. Desktop 0.2.1-rc.2 session/create only accepts cwd, not per-caller read/write policy."
+		};
+	}
+	async authorize(input, meta) {
+		await this.prepare(input, meta);
+		throw new Error("Desktop cannot apply the current caller's opaque Codex sandbox policy. No DSH session or task was submitted. Per-call paths, cwd, a prompt and global workspace roots cannot replace execution-side policy enforcement.");
+	}
+	owns(binding, meta) {
+		if (!binding) return false;
+		const identity = callerIdentity(meta);
+		return identity.callerFingerprint === binding.callerFingerprint && identity.policyFingerprint === binding.policyFingerprint;
+	}
+	async verifyStored(binding, meta) {
+		if (!binding) throw new Error("Session has no caller scope binding; legacy or foreign sessions cannot be adopted automatically.");
+		const identity = callerIdentity(meta);
+		if (identity.callerFingerprint !== binding.callerFingerprint) throw new Error("Session belongs to another caller.");
+		if (identity.policyFingerprint !== binding.policyFingerprint) throw new Error("Caller policy changed; use a new scoped session after native enforcement is available.");
+		if (fingerprint(await normalizeScope(binding.requested)) !== binding.scopeFingerprint) throw new Error("Scoped directory identity changed; do not reuse this session.");
+	}
+};
+
+//#endregion
 //#region src/desktop-manager.ts
 /** Attaches to an existing Host. No branch in this class launches or stops DSH. */
 var DesktopAttachManager = class {
@@ -10764,6 +10858,7 @@ var DesktopAttachManager = class {
 	client;
 	store;
 	roots;
+	scopePolicy;
 	pollIntervalMs;
 	opener;
 	runs = /* @__PURE__ */ new Map();
@@ -10773,7 +10868,8 @@ var DesktopAttachManager = class {
 	constructor(options = {}) {
 		this.client = options.client ?? new DesktopClient();
 		this.store = new DesktopStore(resolve(options.dataDirectory ?? resolveDataDirectory()));
-		this.roots = options.allowedRoots ?? resolveAllowedRoots();
+		this.roots = options.allowedRoots ?? [];
+		this.scopePolicy = options.scopePolicy ?? new DesktopScopePolicy();
 		this.pollIntervalMs = options.pollIntervalMs ?? 500;
 		this.opener = options.openBrowser ?? (async (url) => {
 			if (process.platform !== "darwin") throw new Error("Open Desktop manually and select the returned sessionId.");
@@ -10786,6 +10882,9 @@ var DesktopAttachManager = class {
 				child.once("close", (code) => code === 0 ? done() : reject(/* @__PURE__ */ new Error("Could not focus Desktop.")));
 			});
 		});
+	}
+	async inspectAccessScope(input, meta) {
+		return this.scopePolicy.inspect(input, meta);
 	}
 	connectionStatus() {
 		return this.client.status();
@@ -10839,8 +10938,9 @@ var DesktopAttachManager = class {
 			stoppedAt: (/* @__PURE__ */ new Date()).toISOString()
 		};
 	}
-	async start(input) {
+	async start(input, meta) {
 		if (!input.task.trim() || input.task.length > 1e5) throw new Error("task must contain 1–100,000 characters.");
+		const callerScope = await this.scopePolicy.authorize(input, meta);
 		await this.load();
 		const service = await this.startService({
 			workspace: input.workspace,
@@ -10851,9 +10951,9 @@ var DesktopAttachManager = class {
 		const reused = Boolean(sessionId);
 		if (sessionId) {
 			for (const previous of this.runs.values()) if (previous.workspace === workspace && previous.sessionId === sessionId && previous.status === "running") {
-				if ((await this.get(previous.runId)).status === "running") throw new Error("The previous run is still running or unresolved. Read that run or inspect Desktop; do not resend its prompt.");
+				if ((await this.get(previous.runId, meta)).status === "running") throw new Error("The previous run is still running or unresolved. Read that run or inspect Desktop; do not resend its prompt.");
 			}
-			await this.knownSession(workspace, sessionId);
+			if ((await this.knownSession(workspace, sessionId, meta)).callerScope.scopeFingerprint !== callerScope.scopeFingerprint) throw new Error("Requested scope changed; an existing session cannot be reused under different directory bounds.");
 		} else {
 			const created = await this.client.rpc("workspace/create", { request: { path: workspace } });
 			sessionId = (await this.client.rpc("session/create", { request: { workspaceId: created.workspace.workspaceId } })).sessionId;
@@ -10871,6 +10971,7 @@ var DesktopAttachManager = class {
 				sessionReused: reused,
 				task: input.task.trim(),
 				workspace,
+				callerScope,
 				webUrl: service.webUrl,
 				guiUrl: DESKTOP_GUI_URL,
 				mode: "desktop-attach",
@@ -10916,9 +11017,10 @@ var DesktopAttachManager = class {
 			throw error;
 		}
 	}
-	async get(runId) {
+	async get(runId, meta) {
 		await this.load();
 		const run = this.requireRun(runId);
+		await this.scopePolicy.verifyStored(run.callerScope, meta);
 		try {
 			const service = await this.startService({ workspace: run.workspace });
 			run.serviceId = service.serviceId;
@@ -10953,36 +11055,37 @@ var DesktopAttachManager = class {
 		}
 		return { ...run };
 	}
-	async wait(runId, timeoutMs) {
+	async wait(runId, timeoutMs, meta) {
 		const deadline = Date.now() + Math.min(3e4, Math.max(0, timeoutMs));
-		let snapshot = await this.get(runId);
+		let snapshot = await this.get(runId, meta);
 		while (snapshot.status === "running" && !snapshot.error && Date.now() < deadline) {
 			await new Promise((resolve) => setTimeout(resolve, Math.min(this.pollIntervalMs, Math.max(1, deadline - Date.now()))));
-			snapshot = await this.get(runId);
+			snapshot = await this.get(runId, meta);
 		}
 		return snapshot;
 	}
-	async list() {
+	async list(meta) {
 		await this.load();
-		return Promise.all([...this.runs.keys()].map((id) => this.get(id)));
+		return Promise.all([...this.runs.values()].filter((run) => this.scopePolicy.owns(run.callerScope, meta)).map((run) => this.get(run.runId, meta)));
 	}
-	async cancel(runId) {
+	async cancel(runId, meta) {
 		await this.load();
 		const run = this.requireRun(runId);
+		await this.scopePolicy.verifyStored(run.callerScope, meta);
 		const workspace = await this.workspace(run.workspace);
-		await this.get(runId);
+		await this.get(runId, meta);
 		if (run.status !== "running") return { ...run };
 		if (!this.leases.has(runId)) this.leases.set(runId, await this.store.acquire(run.workspace, run.sessionId, runId));
 		await this.summary(workspace, run.sessionId);
 		run.cancelRequested = true;
 		await this.store.save(run);
 		await this.client.rpc("session/cancel", { request: { sessionId: run.sessionId } });
-		return this.get(runId);
+		return this.get(runId, meta);
 	}
-	async readSession(input) {
+	async readSession(input, meta) {
 		await this.load();
 		const workspace = await this.workspace(input.workspace);
-		await this.knownSession(workspace, input.sessionId);
+		await this.knownSession(workspace, input.sessionId, meta);
 		const summary = await this.summary(workspace, input.sessionId);
 		return {
 			sessionId: input.sessionId,
@@ -10991,9 +11094,10 @@ var DesktopAttachManager = class {
 			records: await this.history(input.sessionId, this.cursor(summary), -1)
 		};
 	}
-	async runEvents(runId, timeoutMs) {
+	async runEvents(runId, timeoutMs, meta) {
 		await this.load();
 		const run = this.requireRun(runId);
+		await this.scopePolicy.verifyStored(run.callerScope, meta);
 		await this.summary(await this.workspace(run.workspace), run.sessionId);
 		const frames = await this.client.collect("session/follow", { request: {
 			address: {
@@ -11009,9 +11113,10 @@ var DesktopAttachManager = class {
 			frames
 		};
 	}
-	async runControl(runId) {
+	async runControl(runId, meta) {
 		await this.load();
 		const run = this.requireRun(runId);
+		await this.scopePolicy.verifyStored(run.callerScope, meta);
 		await this.summary(await this.workspace(run.workspace), run.sessionId);
 		const baseline = await this.client.first("session/control", {});
 		return {
@@ -11024,10 +11129,10 @@ var DesktopAttachManager = class {
 	async modelCatalog() {
 		return this.client.rpc("session/modelCatalog", {});
 	}
-	async selectModel(input) {
+	async selectModel(input, meta) {
 		await this.load();
 		const workspace = await this.workspace(input.workspace);
-		await this.knownSession(workspace, input.sessionId);
+		await this.knownSession(workspace, input.sessionId, meta);
 		const release = await this.store.acquire(workspace, input.sessionId, randomUUID());
 		try {
 			if ((await this.summary(workspace, input.sessionId)).running) throw new Error("Desktop session is still running.");
@@ -11061,9 +11166,11 @@ var DesktopAttachManager = class {
 		this.leases.delete(id);
 		if (release) await release();
 	}
-	async knownSession(workspace, sessionId) {
-		const row = await this.summary(workspace, sessionId);
-		if (![...this.runs.values()].some((run) => run.sessionId === sessionId && run.workspace === workspace) && row.blank !== true) throw new Error("Only a session previously delegated in this workspace or a selected blank session may be continued or inspected.");
+	async knownSession(workspace, sessionId, meta) {
+		const run = [...this.runs.values()].find((run) => run.sessionId === sessionId && run.workspace === workspace);
+		await this.scopePolicy.verifyStored(run?.callerScope, meta);
+		await this.summary(workspace, sessionId);
+		return run;
 	}
 	async summary(workspace, sessionId) {
 		const row = (await this.client.rpc("session/list", { _request: {} })).items.find((item) => item.sessionId === sessionId);
@@ -11101,11 +11208,11 @@ var DesktopAttachManager = class {
 		if (!isAbsolute(input)) throw new Error("workspace must be an absolute path.");
 		const path = await realpath(input);
 		if (!(await stat(path)).isDirectory()) throw new Error("workspace must be a directory.");
-		if (!this.roots.length) throw new Error("Configure DSH_MCP_WORKSPACE_ROOTS before Desktop dispatch.");
+		if (!this.roots.length) return path;
 		if (!(await Promise.all(this.roots.map((root) => realpath(root)))).some((root) => {
 			const child = relative(root, path);
 			return child === "" || !child.startsWith("..") && !isAbsolute(child);
-		})) throw new Error("workspace is outside DSH_MCP_WORKSPACE_ROOTS.");
+		})) throw new Error("workspace is outside the additional deployment ceiling.");
 		return path;
 	}
 };
@@ -25074,6 +25181,10 @@ const EMPTY_COMPLETION_RESULT = { completion: {
 //#endregion
 //#region src/server.ts
 const runIdSchema = string().uuid().describe("Run identifier returned by start_run.");
+const accessScopeSchema = object$2({
+	readRoots: array(string().min(1)).max(128),
+	writeRoots: array(string().min(1)).max(128)
+}).describe("Requested per-call directory bounds; never a permission grant. Codex supplies caller identity and opaque policy separately in transport _meta.");
 const serviceIdSchema = string().uuid().describe("Service identifier returned by start_service or start_run.");
 function result(value) {
 	const structuredContent = { ...value };
@@ -25098,8 +25209,14 @@ function failure(error) {
 function createMcpServer(manager = createRunManager()) {
 	const server = new McpServer({
 		name: "deepseek-harness-for-codex",
-		version: "0.4.0-desktop.1"
-	}, { instructions: "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Independently review changes. Only open a GUI on user request." });
+		version: "0.4.0-desktop.2"
+	}, {
+		capabilities: { experimental: {
+			"codex/sandbox-state": {},
+			"codex/sandbox-state-meta": {}
+		} },
+		instructions: "Default desktop-attach mode connects only to an existing user-authorized Desktop Host. Show dsh://open and sessionId; that link focuses Desktop and does not select a session. Keep approvals in Desktop GUI. Never discover a private token, persist credentials, automatically replay a prompt, or fall back to launching DSH. managed-web is a separate explicit mode. Before dispatch call inspect_access_scope with this caller's requested read/write directories. Paths in arguments, MCP roots and cwd are not permission grants. Current Desktop lacks execution-side Codex policy support and dispatch is blocked; never bypass this with managed-web or another tool. Independently review changes. Only open a GUI on user request."
+	});
 	server.registerTool("start_service", {
 		title: "Start the local DeepSeek Harness Web UI",
 		description: "In desktop-attach, verify the authorized existing Host and workspace without starting DSH. In explicit managed-web mode, start or reuse a local Web process.",
@@ -25113,7 +25230,7 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: true,
 			openWorldHint: true
 		}
-	}, async (input) => {
+	}, async (input, extra) => {
 		try {
 			return result(await manager.startService(input));
 		} catch (error) {
@@ -25130,7 +25247,7 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: true,
 			openWorldHint: true
 		}
-	}, async (input) => {
+	}, async (input, extra) => {
 		try {
 			return result(await manager.openService(input.serviceId));
 		} catch (error) {
@@ -25158,7 +25275,7 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: true,
 			openWorldHint: false
 		}
-	}, async (input) => {
+	}, async (input, extra) => {
 		try {
 			return result(await manager.stopService(input.serviceId));
 		} catch (error) {
@@ -25179,12 +25296,11 @@ function createMcpServer(manager = createRunManager()) {
 		const runtime = inspectRuntime();
 		if (manager instanceof DesktopAttachManager) {
 			const connection = manager.connectionStatus();
-			const roots = runtime.allowedWorkspaceRoots;
 			return result({
 				...runtime,
-				ready: Boolean(runtime.nodeSupported && connection.connected && roots.length),
+				ready: false,
 				desktop: connection,
-				missing: [...connection.connected ? [] : ["user-approved connection file; call connect_desktop"], ...roots.length ? [] : ["DSH_MCP_WORKSPACE_ROOTS"]]
+				missing: [...connection.connected ? [] : ["user-approved connection file; call connect_desktop"], "per-call trusted Codex metadata and native DSH execution-side policy bridge; call inspect_access_scope"]
 			});
 		}
 		return result(runtime);
@@ -25195,6 +25311,7 @@ function createMcpServer(manager = createRunManager()) {
 		inputSchema: {
 			task: string().min(1).max(1e5).describe("Complete implementation task, constraints, and acceptance checks for DeepSeek Harness."),
 			workspace: string().min(1).describe("Absolute path of the repository DeepSeek Harness may inspect and modify."),
+			...manager instanceof DesktopAttachManager ? { accessScope: accessScopeSchema } : {},
 			sessionId: string().min(1).optional().describe("Completed Harness session to continue. Pass a sessionId returned by an earlier run in this workspace, or omit it to create a new session."),
 			openBrowser: boolean().default(false).describe("Open the live Harness Web page. Keep false unless the user explicitly requested it.")
 		},
@@ -25204,9 +25321,9 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: false,
 			openWorldHint: true
 		}
-	}, async (input) => {
+	}, async (input, extra) => {
 		try {
-			return result(await manager.start(input));
+			return result(await (manager instanceof DesktopAttachManager ? manager.start(input, extra._meta) : manager.start(input)));
 		} catch (error) {
 			return failure(error);
 		}
@@ -25221,9 +25338,9 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: true,
 			openWorldHint: false
 		}
-	}, async (input) => {
+	}, async (input, extra) => {
 		try {
-			return result(await manager.get(input.runId));
+			return result(await (manager instanceof DesktopAttachManager ? manager.get(input.runId, extra._meta) : manager.get(input.runId)));
 		} catch (error) {
 			return failure(error);
 		}
@@ -25241,9 +25358,9 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: true,
 			openWorldHint: false
 		}
-	}, async (input) => {
+	}, async (input, extra) => {
 		try {
-			return result(await manager.wait(input.runId, input.timeoutMs));
+			return result(await (manager instanceof DesktopAttachManager ? manager.wait(input.runId, input.timeoutMs, extra._meta) : manager.wait(input.runId, input.timeoutMs)));
 		} catch (error) {
 			return failure(error);
 		}
@@ -25258,7 +25375,13 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: true,
 			openWorldHint: false
 		}
-	}, async () => result({ runs: await manager.list() }));
+	}, async (_, extra) => {
+		try {
+			return result({ runs: await (manager instanceof DesktopAttachManager ? manager.list(extra._meta) : manager.list()) });
+		} catch (error) {
+			return failure(error);
+		}
+	});
 	server.registerTool("cancel_run", {
 		title: "Cancel a local DeepSeek Harness run",
 		description: "Cancel the agent turn in its visible Web session while keeping the Harness Web UI running.",
@@ -25269,14 +25392,34 @@ function createMcpServer(manager = createRunManager()) {
 			idempotentHint: true,
 			openWorldHint: false
 		}
-	}, async (input) => {
+	}, async (input, extra) => {
 		try {
-			return result(await manager.cancel(input.runId));
+			return result(await (manager instanceof DesktopAttachManager ? manager.cancel(input.runId, extra._meta) : manager.cancel(input.runId)));
 		} catch (error) {
 			return failure(error);
 		}
 	});
 	if (manager instanceof DesktopAttachManager) {
+		server.registerTool("inspect_access_scope", {
+			title: "Check this caller’s requested directory scope",
+			description: "Local preflight only: validate per-call read/write directory proposals and host-supplied Codex sandbox metadata. No Desktop connection or task. Current Desktop cannot enforce the opaque caller policy, so canDispatch is false. Never treat model declarations, MCP roots, cwd or global env roots as authority.",
+			inputSchema: {
+				workspace: string().min(1),
+				accessScope: accessScopeSchema
+			},
+			annotations: {
+				readOnlyHint: true,
+				destructiveHint: false,
+				idempotentHint: true,
+				openWorldHint: false
+			}
+		}, async (input, extra) => {
+			try {
+				return result(await manager.inspectAccessScope(input, extra._meta));
+			} catch (error) {
+				return failure(error);
+			}
+		});
 		server.registerTool("connect_desktop", {
 			title: "Connect to an authorized existing Desktop Host",
 			description: "Read one connection file explicitly provided and approved by the human user. Exchange its loopback /connect URL for a memory-only passive API Peer. Never search IPC, logs, environment, credentials, sessions, or databases for a token. This does not submit a model task.",
@@ -25287,7 +25430,7 @@ function createMcpServer(manager = createRunManager()) {
 				idempotentHint: false,
 				openWorldHint: false
 			}
-		}, async (input) => {
+		}, async (input, extra) => {
 			try {
 				return result(await manager.connectDesktop(input));
 			} catch (error) {
@@ -25308,9 +25451,9 @@ function createMcpServer(manager = createRunManager()) {
 				idempotentHint: true,
 				openWorldHint: false
 			}
-		}, async (input) => {
+		}, async (input, extra) => {
 			try {
-				return result(await manager.readSession(input));
+				return result(await manager.readSession(input, extra._meta));
 			} catch (error) {
 				return failure(error);
 			}
@@ -25328,9 +25471,9 @@ function createMcpServer(manager = createRunManager()) {
 				idempotentHint: true,
 				openWorldHint: false
 			}
-		}, async (input) => {
+		}, async (input, extra) => {
 			try {
-				return result(await manager.runEvents(input.runId, input.timeoutMs));
+				return result(await manager.runEvents(input.runId, input.timeoutMs, extra._meta));
 			} catch (error) {
 				return failure(error);
 			}
@@ -25345,9 +25488,9 @@ function createMcpServer(manager = createRunManager()) {
 				idempotentHint: true,
 				openWorldHint: false
 			}
-		}, async (input) => {
+		}, async (input, extra) => {
 			try {
-				return result(await manager.runControl(input.runId));
+				return result(await manager.runControl(input.runId, extra._meta));
 			} catch (error) {
 				return failure(error);
 			}
@@ -25384,9 +25527,9 @@ function createMcpServer(manager = createRunManager()) {
 				idempotentHint: true,
 				openWorldHint: false
 			}
-		}, async (input) => {
+		}, async (input, extra) => {
 			try {
-				return result({ value: await manager.selectModel(input) });
+				return result({ value: await manager.selectModel(input, extra._meta) });
 			} catch (error) {
 				return failure(error);
 			}

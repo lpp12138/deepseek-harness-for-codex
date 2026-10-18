@@ -42,6 +42,8 @@ export interface RunSnapshot {
 
 /** Inputs needed to start a visible Harness task. */
 export interface StartRunInput {
+  /** Requested per-call bounds. Authority comes only from host transport metadata. */
+  accessScope?: { readRoots: string[]; writeRoots: string[] } | undefined;
   task: string;
   workspace: string;
   sessionId?: string | undefined;

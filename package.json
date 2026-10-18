@@ -10,7 +10,8 @@
     "plugins/deepseek-harness/dist/",
     "README.md",
     "README.en.md",
-    "LICENSE"
+    "LICENSE",
+    "plugins/deepseek-harness/THIRD_PARTY_LICENSES.txt"
   ],
   "repository": {
     "type": "git",
@@ -30,7 +31,7 @@
   },
   "packageManager": "npm@10.9.4",
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/build-notices.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "npm run typecheck && npm run test && npm run build && npm run test:bundle",
